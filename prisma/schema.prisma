@@ -21,26 +21,30 @@ model Roadmap {
   id             String   @id @default(uuid())
   userId         String
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type           String   @default("EXAM")
   title          String
   subject        String   @default("General")
-  syllabus       String
-  examDate       DateTime
+  syllabus       String?
+  examDate       DateTime?
   dailyStudyTime Int
   createdAt      DateTime @default(now())
   topics         Topic[]
 }
 
 model Topic {
-  id         String     @id @default(uuid())
-  roadmapId  String
-  roadmap    Roadmap    @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
-  title      String
-  theory     String
-  videoUrl   String?
-  order      Int
-  isUnlocked Boolean    @default(false)
-  quizScore  Int?
-  questions  Question[]
+  id           String     @id @default(uuid())
+  roadmapId    String
+  roadmap      Roadmap    @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  title        String
+  theory       String
+  notes        String?
+  videoUrl     String?
+  timeEstimate Int?
+  difficulty   String?
+  order        Int
+  isUnlocked   Boolean    @default(false)
+  quizScore    Int?
+  questions    Question[]
 }
 
 model Question {
