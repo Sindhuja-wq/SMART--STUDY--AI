@@ -10,9 +10,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { title, syllabus, examDate, dailyStudyTime } = await req.json();
+    const { title, subject, syllabus, examDate, dailyStudyTime } = await req.json();
 
-    if (!title || !syllabus || !examDate || !dailyStudyTime) {
+    if (!title || !subject || !syllabus || !examDate || !dailyStudyTime) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
@@ -20,8 +20,8 @@ export async function POST(req: Request) {
     const daysLeft = Math.ceil((examDateObj.getTime() - new Date().getTime()) / (1000 * 3600 * 24));
 
     const prompt = `
-Given the syllabus: "${syllabus}", the exam is in ${daysLeft} days, and I can study ${dailyStudyTime} minutes per day.
-Generate a structured study roadmap with a list of topics.
+Given the subject "${subject}" and syllabus: "${syllabus}", the exam is in ${daysLeft} days, and I can study ${dailyStudyTime} minutes per day.
+Generate a structured study roadmap with a realistic distribution of topics considering the time left.
 Respond ONLY in valid JSON format with this exact structure, containing an array of objects:
 [
   {
@@ -71,6 +71,7 @@ Do not include markdown tags like \`\`\`json or any other text. Return ONLY the 
       data: {
         userId: session.user.id as string,
         title,
+        subject,
         syllabus,
         examDate: examDateObj,
         dailyStudyTime: parseInt(dailyStudyTime),

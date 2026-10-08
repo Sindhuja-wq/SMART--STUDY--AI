@@ -4,10 +4,10 @@ import bcrypt from "bcryptjs";
 
 export async function POST(req: Request) {
   try {
-    const { email, password, role } = await req.json();
+    const { name, email, password, role } = await req.json();
 
-    if (!email || !password) {
-      return NextResponse.json({ error: "Missing email or password" }, { status: 400 });
+    if (!email || !password || !name) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
     const existingUser = await prisma.user.findUnique({
@@ -22,6 +22,7 @@ export async function POST(req: Request) {
 
     const user = await prisma.user.create({
       data: {
+        name,
         email,
         password: hashedPassword,
         role: role === "ADMIN" ? "ADMIN" : "USER",

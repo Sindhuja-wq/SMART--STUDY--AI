@@ -27,14 +27,15 @@ export async function POST(req: Request) {
     }
 
     const prompt = `
-Generate a multiple-choice quiz with exactly 3 questions for the topic: "${topic.title}".
+Generate a multiple-choice quiz with exactly 5 questions for the topic: "${topic.title}".
 Based on this theory: "${topic.theory.substring(0, 500)}...".
 Respond ONLY in valid JSON format with an array of objects:
 [
   {
     "text": "Question text?",
     "options": ["Option A", "Option B", "Option C", "Option D"],
-    "correctOption": 1
+    "correctOption": 1,
+    "explanation": "Explanation for why this is correct."
   }
 ]
 Note: correctOption is the zero-based index of the correct answer in the options array.
@@ -79,6 +80,7 @@ Do not include markdown tags. Return ONLY the raw JSON array.
             text: q.text,
             options: JSON.stringify(q.options),
             correctOption: q.correctOption,
+            explanation: q.explanation,
           }
         })
       )

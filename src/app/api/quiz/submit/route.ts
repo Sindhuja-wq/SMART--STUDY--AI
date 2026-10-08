@@ -39,9 +39,9 @@ export async function POST(req: Request) {
       data: { quizScore: score }
     });
 
-    // If score >= 70, unlock next topic
+    // If score >= 80, unlock next topic
     let unlockedNext = false;
-    if (score >= 70) {
+    if (score >= 80) {
       const allTopics = topic.roadmap.topics;
       const currentIndex = allTopics.findIndex(t => t.id === topicId);
       if (currentIndex !== -1 && currentIndex + 1 < allTopics.length) {
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, score, unlockedNext });
+    return NextResponse.json({ success: true, score, unlockedNext, questions: topic.questions });
   } catch (error) {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }

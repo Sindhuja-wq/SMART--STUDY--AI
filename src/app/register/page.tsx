@@ -1,22 +1,28 @@
 "use client";
 
-import { useState } from "next";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 
 export default function Register() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
     const res = await fetch("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ name, email, password }),
     });
 
     if (res.ok) {
@@ -36,6 +42,10 @@ export default function Register() {
           {error && <div className="text-error mb-4 text-center">{error}</div>}
           
           <div className="form-group">
+            <label className="form-label">Full Name</label>
+            <input type="text" required className="form-input" value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="form-group">
             <label className="form-label">Email</label>
             <input type="email" required className="form-input" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
@@ -43,6 +53,11 @@ export default function Register() {
           <div className="form-group">
             <label className="form-label">Password</label>
             <input type="password" required className="form-input" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Confirm Password</label>
+            <input type="password" required className="form-input" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
           </div>
 
           <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>Sign Up</button>

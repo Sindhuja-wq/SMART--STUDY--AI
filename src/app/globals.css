@@ -1,4 +1,18 @@
 :root {
+  --bg-color: #ffffff;
+  --text-color: #0f172a;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --secondary: #e2e8f0;
+  --accent: #10b981;
+  --danger: #ef4444;
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(0, 0, 0, 0.1);
+  --font-family: 'Inter', system-ui, sans-serif;
+  --input-bg: rgba(255, 255, 255, 0.8);
+}
+
+.dark {
   --bg-color: #0f172a;
   --text-color: #f8fafc;
   --primary: #3b82f6;
@@ -8,7 +22,7 @@
   --danger: #ef4444;
   --glass-bg: rgba(30, 41, 59, 0.7);
   --glass-border: rgba(255, 255, 255, 0.1);
-  --font-family: 'Inter', system-ui, sans-serif;
+  --input-bg: rgba(15, 23, 42, 0.6);
 }
 
 * {
@@ -137,9 +151,9 @@ body {
   width: 100%;
   padding: 0.75rem 1rem;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--input-bg);
   border: 1px solid var(--glass-border);
-  color: white;
+  color: var(--text-color);
   font-family: inherit;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { BookOpen, LogOut, User } from "lucide-react";
 
+import { ThemeToggle } from "./ThemeToggle";
+
 export function Navbar() {
   const { data: session } = useSession();
 
@@ -14,12 +16,13 @@ export function Navbar() {
         Smart Study AI
       </Link>
       <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <ThemeToggle />
         {session ? (
           <>
             <Link href="/dashboard" className="btn btn-outline">Dashboard</Link>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#cbd5e1' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-color)' }}>
               <User size={18} />
-              {session.user?.email}
+              {session.user?.name || session.user?.email}
             </div>
             <button onClick={() => signOut({ callbackUrl: '/' })} className="btn btn-primary flex-center" style={{ gap: '0.5rem', padding: '0.5rem 1rem' }}>
               <LogOut size={16} /> Logout

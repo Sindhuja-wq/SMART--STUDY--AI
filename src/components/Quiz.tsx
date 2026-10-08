@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "next";
+import { useState } from "react";
 import { CheckCircle2, Circle } from "lucide-react";
 
 export function Quiz({ topicId, onComplete }: { topicId: string, onComplete: () => void }) {
@@ -42,13 +42,38 @@ export function Quiz({ topicId, onComplete }: { topicId: string, onComplete: () 
 
   if (result) {
     return (
-      <div className="glass-card text-center" style={{ marginTop: '1rem', background: result.score >= 70 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)' }}>
+      <div className="glass-card text-center" style={{ marginTop: '1rem', background: result.score >= 80 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)' }}>
         <h3 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>You scored {result.score}%</h3>
-        {result.score >= 70 ? (
+        {result.score >= 80 ? (
           <p style={{ color: '#10b981' }}>Great job! You have unlocked the next topic.</p>
         ) : (
-          <p style={{ color: '#ef4444' }}>You need 70% to unlock the next topic. Review the theory and try again.</p>
+          <p style={{ color: '#ef4444' }}>You need 80% to unlock the next topic. Review the theory and try again.</p>
         )}
+        
+        <div style={{ marginTop: '2rem', textAlign: 'left' }}>
+          {result.questions && result.questions.map((q: any, i: number) => {
+            const opts = JSON.parse(q.options);
+            const userAns = answers[q.id];
+            const isCorrect = userAns === q.correctOption;
+            return (
+              <div key={q.id} style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
+                <p style={{ fontWeight: '600' }}>{i + 1}. {q.text}</p>
+                <p style={{ color: isCorrect ? '#10b981' : '#ef4444', marginTop: '0.5rem' }}>
+                  Your Answer: {opts[userAns]} {isCorrect ? '✅' : '❌'}
+                </p>
+                {!isCorrect && (
+                  <p style={{ color: '#10b981', marginTop: '0.25rem' }}>
+                    Correct Answer: {opts[q.correctOption]}
+                  </p>
+                )}
+                <p style={{ color: '#94a3b8', marginTop: '0.5rem', fontSize: '0.9rem' }}>
+                  <strong>Explanation:</strong> {q.explanation}
+                </p>
+              </div>
+            )
+          })}
+        </div>
+
         <button onClick={() => {setResult(null); setAnswers({});}} className="btn btn-primary mt-4">Retake Quiz</button>
       </div>
     );

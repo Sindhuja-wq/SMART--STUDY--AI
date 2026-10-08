@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "next";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -13,7 +13,7 @@ export default function Dashboard() {
   const [roadmaps, setRoadmaps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
-  const [formData, setFormData] = useState({ title: "", syllabus: "", examDate: "", dailyStudyTime: "" });
+  const [formData, setFormData] = useState({ title: "", subject: "", syllabus: "", examDate: "", dailyStudyTime: "" });
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -72,6 +72,10 @@ export default function Dashboard() {
                 <input required className="form-input" placeholder="e.g. React Mastery" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
               </div>
               <div className="form-group">
+                <label className="form-label">Subject / Course Name</label>
+                <input required className="form-input" placeholder="e.g. Python, DBMS" value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})} />
+              </div>
+              <div className="form-group">
                 <label className="form-label">Syllabus (Topics to cover)</label>
                 <textarea required className="form-input form-textarea" placeholder="Paste your syllabus here..." value={formData.syllabus} onChange={e => setFormData({...formData, syllabus: e.target.value})} />
               </div>
@@ -97,7 +101,7 @@ export default function Dashboard() {
               </div>
             ) : (
               roadmaps.map((rm: any) => {
-                const completed = rm.topics.filter((t: any) => t.quizScore && t.quizScore >= 70).length;
+                const completed = rm.topics.filter((t: any) => t.quizScore && t.quizScore >= 80).length;
                 const total = rm.topics.length;
                 const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
                 

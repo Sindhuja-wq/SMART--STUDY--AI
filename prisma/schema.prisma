@@ -9,6 +9,7 @@ datasource db {
 
 model User {
   id        String    @id @default(uuid())
+  name      String?
   email     String    @unique
   password  String
   role      String    @default("USER")
@@ -21,6 +22,7 @@ model Roadmap {
   userId         String
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   title          String
+  subject        String   @default("General")
   syllabus       String
   examDate       DateTime
   dailyStudyTime Int
@@ -48,4 +50,5 @@ model Question {
   text          String
   options       String   // Stored as JSON stringified array
   correctOption Int
+  explanation   String?
 }
