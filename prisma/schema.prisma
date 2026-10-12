@@ -8,13 +8,18 @@ datasource db {
 }
 
 model User {
-  id        String    @id @default(uuid())
-  name      String?
-  email     String    @unique
-  password  String
-  role      String    @default("USER")
-  createdAt DateTime  @default(now())
-  roadmaps  Roadmap[]
+  id           String    @id @default(uuid())
+  name         String?
+  email        String    @unique
+  password     String
+  role         String    @default("USER")
+  isVerified   Boolean   @default(false)
+  otpCode      String?
+  otpExpiresAt DateTime?
+  otpAttempts  Int       @default(0)
+  lastOtpSentAt DateTime?
+  createdAt    DateTime  @default(now())
+  roadmaps     Roadmap[]
 }
 
 model Roadmap {
@@ -55,4 +60,5 @@ model Question {
   options       String   // Stored as JSON stringified array
   correctOption Int
   explanation   String?
+  isActive      Boolean  @default(true)
 }

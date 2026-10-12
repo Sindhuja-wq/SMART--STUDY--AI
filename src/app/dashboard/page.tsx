@@ -5,17 +5,39 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
-import { Plus, BookOpen, Loader2, GraduationCap, Target, Clock, ArrowRight, X } from "lucide-react";
+import { 
+  Plus, 
+  BookOpen, 
+  Loader2, 
+  GraduationCap, 
+  Target, 
+  Clock, 
+  ArrowRight, 
+  X, 
+  Sparkles, 
+  Calendar, 
+  CheckCircle2, 
+  Flame, 
+  TrendingUp, 
+  Compass, 
+  BookMarked,
+  BrainCircuit,
+  Award,
+  Layers,
+  Search
+} from "lucide-react";
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [roadmaps, setRoadmaps] = useState([]);
+  const [roadmaps, setRoadmaps] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
   // UI State
   const [activeModal, setActiveModal] = useState<"COURSE" | "EXAM" | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [creationStep, setCreationStep] = useState("Analyzing curriculum requirements...");
+  const [searchQuery, setSearchQuery] = useState("");
   
   // Form State
   const [formData, setFormData] = useState({ 
@@ -26,6 +48,15 @@ export default function Dashboard() {
     dailyStudyTime: "60" 
   });
 
+  const popularSubjects = [
+    { name: "Python", title: "Master Python 3 & Algorithms", time: "60" },
+    { name: "Java", title: "Comprehensive Java & Data Structures", time: "60" },
+    { name: "DBMS", title: "Database Systems & SQL Optimization", time: "45" },
+    { name: "Machine Learning", title: "Applied ML & Deep Learning Essentials", time: "90" },
+    { name: "React", title: "Modern React 19 & Next.js Architecture", time: "60" },
+    { name: "System Design", title: "Distributed Systems & Cloud Scalability", time: "45" },
+  ];
+
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login");
@@ -35,184 +66,698 @@ export default function Dashboard() {
   }, [status, router]);
 
   const fetchRoadmaps = async () => {
-    const res = await fetch("/api/roadmap");
-    if (res.ok) {
-      const data = await res.json();
-      setRoadmaps(data.roadmaps);
+    try {
+      const res = await fetch("/api/roadmap");
+      if (res.ok) {
+        const data = await res.json();
+        setRoadmaps(data.roadmaps || []);
+      }
+    } catch (err) {
+      console.error("Error fetching roadmaps:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
+  };
+
+  const selectPresetSubject = (sub: typeof popularSubjects[0]) => {
+    setFormData(prev => ({
+      ...prev,
+      subject: sub.name,
+      title: activeModal === "EXAM" ? `${sub.name} Final Exam Prep` : sub.title,
+      dailyStudyTime: sub.time
+    }));
   };
 
   const handleCreate = async (e: React.FormEvent, type: "COURSE" | "EXAM") => {
     e.preventDefault();
     setIsCreating(true);
-    const res = await fetch("/api/roadmap", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...formData, type }),
-    });
 
-    if (res.ok) {
-      const data = await res.json();
-      router.push(`/roadmap/${data.roadmapId}`);
-    } else {
-      alert("Failed to create roadmap. Make sure Ollama is running with llama3.2 model.");
+    const steps = [
+      "Connecting to Neural Curriculum Engine...",
+      "Structuring milestone hierarchy...",
+      "Optimizing daily study allocations...",
+      "Linking curated tutorials & notes...",
+      "Finalizing study roadmap..."
+    ];
+
+    let stepIndex = 0;
+    const interval = setInterval(() => {
+      stepIndex = (stepIndex + 1) % steps.length;
+      setCreationStep(steps[stepIndex]);
+    }, 2200);
+
+    try {
+      const res = await fetch("/api/roadmap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...formData, type }),
+      });
+
+      clearInterval(interval);
+
+      if (res.ok) {
+        const data = await res.json();
+        setActiveModal(null);
+        router.push(`/roadmap/${data.roadmapId}`);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || "Failed to create roadmap. Please verify details.");
+      }
+    } catch (err) {
+      clearInterval(interval);
+      alert("Network error while creating roadmap.");
+    } finally {
+      setIsCreating(false);
     }
-    setIsCreating(false);
   };
 
-  if (status === "loading" || loading) return <div className="flex-center" style={{ height: '100vh' }}><Loader2 className="animate-spin text-primary" size={40} /></div>;
+  if (status === "loading" || loading) {
+    return (
+      <div className="flex-center" style={{ height: "100vh", gap: "1rem", flexDirection: "column" }}>
+        <Loader2 className="animate-spin text-primary" size={44} />
+        <p className="text-muted text-sm">Loading your learning space...</p>
+      </div>
+    );
+  }
 
-  const greeting = new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 18 ? "Good afternoon" : "Good evening";
-  const userName = session?.user?.name || session?.user?.email?.split('@')[0] || "Student";
+  // Personalized greeting & formatted date
+  const hours = new Date().getHours();
+  const greeting = hours < 12 ? "Good morning" : hours < 18 ? "Good afternoon" : "Good evening";
+  const userName = session?.user?.name || session?.user?.email?.split('@')[0] || "Scholar";
+  
+  const currentDateFormatted = new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric"
+  });
+
+  interface ExamCountdownInfo {
+    days: number;
+    title: string;
+    date: string;
+  }
+
+  // Calculate Metrics
+  const totalCourses = roadmaps.length;
+  let totalTopics = 0;
+  let totalCompletedTopics = 0;
+  let nearestExamInfo: ExamCountdownInfo | null = null;
+  let continueRoadmap: any = null;
+  let continueTopic: any = null;
+
+  for (const rm of roadmaps) {
+    const rmTotal = rm.topics?.length || 0;
+    totalTopics += rmTotal;
+    const completed = rm.topics?.filter((t: any) => t.isUnlocked && t.quizScore && t.quizScore >= 80).length || 0;
+    totalCompletedTopics += completed;
+
+    // Exam countdown
+    if (rm.type === "EXAM" && rm.examDate) {
+      const diffDays = Math.ceil((new Date(rm.examDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
+      if (diffDays >= 0 && (!nearestExamInfo || diffDays < nearestExamInfo.days)) {
+        nearestExamInfo = {
+          days: diffDays,
+          title: rm.title,
+          date: new Date(rm.examDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+        };
+      }
+    }
+
+    // Determine "Continue Learning" target
+    if (!continueRoadmap) {
+      const nextIncomplete = rm.topics?.find((t: any) => t.isUnlocked && (!t.quizScore || t.quizScore < 80));
+      if (nextIncomplete) {
+        continueRoadmap = rm;
+        continueTopic = nextIncomplete;
+      }
+    }
+  }
+
+  // If all unlocked are completed, pick first roadmap's last topic or fallback
+  if (!continueRoadmap && roadmaps.length > 0) {
+    continueRoadmap = roadmaps[0];
+    continueTopic = roadmaps[0].topics?.[0];
+  }
+
+  const overallProgress = totalTopics > 0 ? Math.round((totalCompletedTopics / totalTopics) * 100) : 0;
+
+  // Filter roadmaps by search
+  const filteredRoadmaps = roadmaps.filter(rm => 
+    rm.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    rm.subject.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <>
+      <div className="cyber-grid" />
       <Navbar />
-      <main className="container" style={{ paddingTop: '3rem' }}>
+
+      <main className="container" style={{ paddingTop: "2.5rem", paddingBottom: "5rem" }}>
         
-        {/* Header Section */}
-        <div className="mb-8 text-center" style={{ animation: 'slideIn 0.6s ease' }}>
-          <h1 className="text-3xl mb-2">{greeting}, {userName}</h1>
-          <p className="text-muted text-xl">Learn smarter. Build skills. Reach your goals.</p>
-        </div>
+        {/* Welcome Header */}
+        <div 
+          className="glass-card mb-8" 
+          style={{ 
+            padding: "2.25rem 2.5rem", 
+            background: "linear-gradient(135deg, rgba(23, 32, 56, 0.8) 0%, rgba(17, 23, 43, 0.9) 100%)",
+            position: "relative",
+            overflow: "hidden"
+          }}
+        >
+          <div 
+            style={{ 
+              position: "absolute", 
+              top: "-40%", 
+              right: "-5%", 
+              width: "300px", 
+              height: "300px", 
+              background: "radial-gradient(circle, rgba(96, 165, 250, 0.18) 0%, transparent 70%)", 
+              filter: "blur(40px)",
+              pointerEvents: "none"
+            }} 
+          />
 
-        {/* Mode Selection Cards */}
-        <div className="grid-2 mb-8">
-          <div className="glass-card mode-card" onClick={() => setActiveModal("COURSE")}>
-            <div className="mode-icon">🎓</div>
-            <h2 className="text-2xl text-primary">LEARN A COURSE</h2>
-            <p className="text-muted mb-4" style={{ flex: 1 }}>Master a subject at your own pace with AI. No strict deadlines, just pure learning.</p>
-            <button className="btn btn-primary" style={{ width: 'fit-content' }}>
-              Start Learning <ArrowRight size={18} />
-            </button>
-          </div>
-
-          <div className="glass-card mode-card" onClick={() => setActiveModal("EXAM")}>
-            <div className="mode-icon">🎯</div>
-            <h2 className="text-2xl text-accent">EXAM PREPARATION</h2>
-            <p className="text-muted mb-4" style={{ flex: 1 }}>Prepare strategically with an AI-powered study plan optimized for your exam date.</p>
-            <button className="btn btn-accent" style={{ width: 'fit-content' }}>
-              Prepare for Exam <ArrowRight size={18} />
-            </button>
-          </div>
-        </div>
-
-        {/* User Roadmaps */}
-        <div className="mt-8">
-          <h2 className="text-2xl mb-4">Your Learning Journeys</h2>
-          <div className="grid-2">
-            {roadmaps.length === 0 ? (
-              <div className="glass-card flex-center text-center text-muted" style={{ gridColumn: '1 / -1', padding: '4rem' }}>
-                You have no active learning journeys yet. Select a mode above to start!
+          <div className="flex-between" style={{ flexWrap: "wrap", gap: "1.5rem" }}>
+            <div>
+              <div 
+                className="badge badge-purple mb-2" 
+                style={{ fontSize: "0.75rem", gap: "0.35rem" }}
+              >
+                <Calendar size={13} /> {currentDateFormatted}
               </div>
+              <h1 className="text-3xl mb-1">
+                {greeting}, <span className="text-gradient">{userName}</span>
+              </h1>
+              <p className="text-muted text-sm">
+                Track your active roadmaps, complete topic quizzes, and advance toward mastery.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+              <button 
+                onClick={() => { setActiveModal("COURSE"); setFormData({ title: "", subject: "", syllabus: "", examDate: "", dailyStudyTime: "60" }); }}
+                className="btn btn-primary"
+                style={{ gap: "0.5rem" }}
+              >
+                <GraduationCap size={18} /> New Course
+              </button>
+              <button 
+                onClick={() => { setActiveModal("EXAM"); setFormData({ title: "", subject: "", syllabus: "", examDate: "", dailyStudyTime: "60" }); }}
+                className="btn btn-accent"
+                style={{ gap: "0.5rem" }}
+              >
+                <Target size={18} /> Exam Plan
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Study Summary Metrics Row */}
+        <div className="grid-4 mb-8">
+          {/* Card 1: Overall Progress */}
+          <div className="glass-card" style={{ padding: "1.5rem" }}>
+            <div className="flex-between mb-2">
+              <span className="text-muted text-xs" style={{ textTransform: "uppercase", fontWeight: 700 }}>Overall Mastery</span>
+              <TrendingUp size={18} color="#60A5FA" />
+            </div>
+            <div style={{ fontSize: "2rem", fontWeight: 800, color: "var(--accent-primary)" }}>
+              {overallProgress}%
+            </div>
+            <div className="text-muted text-xs mt-2">
+              {totalCompletedTopics} of {totalTopics} topics mastered
+            </div>
+            <div style={{ width: "100%", height: "6px", background: "rgba(255,255,255,0.06)", borderRadius: "999px", marginTop: "0.75rem", overflow: "hidden" }}>
+              <div style={{ width: `${overallProgress}%`, height: "100%", background: "linear-gradient(90deg, #60A5FA, #67E8F9)", transition: "width 0.8s ease" }} />
+            </div>
+          </div>
+
+          {/* Card 2: Active Roadmaps */}
+          <div className="glass-card" style={{ padding: "1.5rem" }}>
+            <div className="flex-between mb-2">
+              <span className="text-muted text-xs" style={{ textTransform: "uppercase", fontWeight: 700 }}>Curriculums</span>
+              <Layers size={18} color="#A78BFA" />
+            </div>
+            <div style={{ fontSize: "2rem", fontWeight: 800, color: "var(--accent-secondary)" }}>
+              {totalCourses}
+            </div>
+            <div className="text-muted text-xs mt-2">
+              Active learning pathways
+            </div>
+            <div style={{ display: "flex", gap: "0.25rem", marginTop: "0.75rem" }}>
+              <span className="badge badge-purple" style={{ fontSize: "0.65rem" }}>Adaptive AI</span>
+              <span className="badge badge-neutral" style={{ fontSize: "0.65rem" }}>Structured</span>
+            </div>
+          </div>
+
+          {/* Card 3: Study Streak & Weekly Activity */}
+          <div className="glass-card" style={{ padding: "1.5rem" }}>
+            <div className="flex-between mb-2">
+              <span className="text-muted text-xs" style={{ textTransform: "uppercase", fontWeight: 700 }}>Study Streak</span>
+              <Flame size={18} color="#FBBF24" />
+            </div>
+            <div style={{ fontSize: "2rem", fontWeight: 800, color: "var(--accent-amber)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+              5 <span style={{ fontSize: "1rem", fontWeight: 600 }}>Days</span>
+            </div>
+            {/* Weekly Days Bar */}
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "4px", marginTop: "0.75rem" }}>
+              {["M", "T", "W", "T", "F", "S", "S"].map((day, idx) => (
+                <div 
+                  key={idx} 
+                  style={{ 
+                    flex: 1, 
+                    textAlign: "center", 
+                    fontSize: "0.65rem", 
+                    fontWeight: 700, 
+                    padding: "3px 0", 
+                    borderRadius: "4px",
+                    background: idx < 5 ? "rgba(251, 191, 36, 0.2)" : "rgba(255, 255, 255, 0.05)",
+                    color: idx < 5 ? "var(--accent-amber)" : "var(--text-muted)",
+                    border: idx < 5 ? "1px solid rgba(251, 191, 36, 0.4)" : "1px solid transparent"
+                  }}
+                >
+                  {day}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Card 4: Upcoming Exam Countdown */}
+          <div className="glass-card" style={{ padding: "1.5rem" }}>
+            <div className="flex-between mb-2">
+              <span className="text-muted text-xs" style={{ textTransform: "uppercase", fontWeight: 700 }}>Exam Countdown</span>
+              <Target size={18} color="#34D399" />
+            </div>
+            {nearestExamInfo ? (
+              <>
+                <div style={{ fontSize: "2rem", fontWeight: 800, color: "var(--accent-emerald)" }}>
+                  {nearestExamInfo.days} <span style={{ fontSize: "1rem", fontWeight: 600 }}>Days</span>
+                </div>
+                <div className="text-muted text-xs mt-2" style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                  {nearestExamInfo.title} ({nearestExamInfo.date})
+                </div>
+              </>
             ) : (
-              roadmaps.map((rm: any) => {
-                const completed = rm.topics.filter((t: any) => t.isUnlocked && t.quizScore && t.quizScore >= 80).length;
-                const total = rm.topics.length;
+              <>
+                <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-main)", marginTop: "0.5rem" }}>
+                  Self-Paced
+                </div>
+                <div className="text-muted text-xs mt-2">
+                  No strict exam deadlines set
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Prominent "Continue Learning" Action Hero (if any course exists) */}
+        {continueRoadmap && continueTopic && (
+          <div 
+            className="glass-card mb-8" 
+            style={{ 
+              padding: "2rem 2.5rem", 
+              borderLeft: "4px solid var(--accent-primary)",
+              background: "linear-gradient(90deg, rgba(23, 32, 56, 0.9) 0%, rgba(17, 23, 43, 0.8) 100%)"
+            }}
+          >
+            <div className="flex-between" style={{ flexWrap: "wrap", gap: "1.5rem" }}>
+              <div style={{ maxWidth: "680px" }}>
+                <div className="flex-between mb-2" style={{ justifyContent: "flex-start", gap: "0.75rem" }}>
+                  <span className="badge badge-primary">Recommended Next Milestone</span>
+                  <span className="text-muted text-xs">{continueRoadmap.subject}</span>
+                </div>
+                <h3 className="text-2xl mb-2" style={{ color: "var(--text-main)" }}>
+                  {continueTopic.title}
+                </h3>
+                <p className="text-muted text-sm" style={{ lineHeight: 1.6 }}>
+                  {continueTopic.theory ? continueTopic.theory.substring(0, 140) + "..." : "Study theory notes and complete the 5-question mastery assessment."}
+                </p>
+              </div>
+
+              <Link 
+                href={`/roadmap/${continueRoadmap.id}`} 
+                className="btn btn-primary"
+                style={{ padding: "0.95rem 1.8rem", fontSize: "1.05rem", gap: "0.5rem", whiteSpace: "nowrap" }}
+              >
+                Continue Learning <ArrowRight size={18} />
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Mode Selection Banners */}
+        <div className="grid-2 mb-8">
+          <div 
+            className="mode-card" 
+            onClick={() => { setActiveModal("COURSE"); setFormData({ title: "", subject: "", syllabus: "", examDate: "", dailyStudyTime: "60" }); }}
+          >
+            <div className="mode-icon-box">🎓</div>
+            <div>
+              <span className="badge badge-primary mb-2">Self-Paced Mode</span>
+              <h2 className="text-2xl text-primary">LEARN A COURSE</h2>
+            </div>
+            <p className="text-muted text-sm" style={{ flex: 1, lineHeight: 1.6 }}>
+              Deeply master any computer science or academic subject from scratch. Structured progressive modules, automatic study notes, and zero stressful deadlines.
+            </p>
+            <button className="btn btn-primary" style={{ width: "fit-content" }}>
+              Configure Course Roadmap <ArrowRight size={16} />
+            </button>
+          </div>
+
+          <div 
+            className="mode-card" 
+            onClick={() => { setActiveModal("EXAM"); setFormData({ title: "", subject: "", syllabus: "", examDate: "", dailyStudyTime: "60" }); }}
+          >
+            <div className="mode-icon-box" style={{ background: "rgba(52, 211, 153, 0.1)", borderColor: "rgba(52, 211, 153, 0.3)" }}>🎯</div>
+            <div>
+              <span className="badge badge-success mb-2">High-Stakes Mode</span>
+              <h2 className="text-2xl text-accent">EXAM PREPARATION</h2>
+            </div>
+            <p className="text-muted text-sm" style={{ flex: 1, lineHeight: 1.6 }}>
+              Prepare methodically for an upcoming mid-term, semester final, or technical qualification. Our AI reverse-engineers the daily pace needed for top scores.
+            </p>
+            <button className="btn btn-accent" style={{ width: "fit-content" }}>
+              Configure Exam Schedule <ArrowRight size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* User Roadmaps Section */}
+        <div>
+          <div className="flex-between mb-6" style={{ flexWrap: "wrap", gap: "1rem" }}>
+            <div>
+              <h2 className="text-2xl">Your Learning Journeys</h2>
+              <p className="text-muted text-sm">Active curriculums with progress tracking and quiz milestones.</p>
+            </div>
+
+            {roadmaps.length > 0 && (
+              <div className="form-input-wrapper" style={{ maxWidth: "280px" }}>
+                <input 
+                  type="text" 
+                  placeholder="Filter journeys..." 
+                  className="form-input" 
+                  style={{ padding: "0.6rem 1rem", fontSize: "0.85rem" }}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+
+          {filteredRoadmaps.length === 0 ? (
+            <div 
+              className="glass-card text-center" 
+              style={{ padding: "4rem 2rem", borderStyle: "dashed" }}
+            >
+              <div 
+                style={{ 
+                  width: "64px", 
+                  height: "64px", 
+                  borderRadius: "50%", 
+                  background: "rgba(96, 165, 250, 0.1)", 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "center",
+                  margin: "0 auto 1.5rem" 
+                }}
+              >
+                <Compass size={32} color="#60A5FA" />
+              </div>
+              <h3 className="text-xl mb-2">No active journeys yet</h3>
+              <p className="text-muted text-sm mb-6" style={{ maxWidth: "460px", margin: "0 auto 1.5rem" }}>
+                Choose a mode above or pick one of our popular quick-start subject tracks to generate your first AI roadmap!
+              </p>
+              
+              <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
+                {popularSubjects.slice(0, 4).map((sub) => (
+                  <button 
+                    key={sub.name}
+                    onClick={() => {
+                      setActiveModal("COURSE");
+                      selectPresetSubject(sub);
+                    }}
+                    className="btn btn-outline"
+                    style={{ fontSize: "0.85rem", padding: "0.5rem 1rem" }}
+                  >
+                    + {sub.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="grid-2">
+              {filteredRoadmaps.map((rm) => {
+                const total = rm.topics?.length || 0;
+                const completed = rm.topics?.filter((t: any) => t.isUnlocked && t.quizScore && t.quizScore >= 80).length || 0;
                 const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
                 const isExam = rm.type === "EXAM";
                 
                 return (
-                  <Link href={`/roadmap/${rm.id}`} key={rm.id} style={{ textDecoration: 'none', color: 'inherit' }}>
-                    <div className="glass-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%' }}>
+                  <Link 
+                    href={`/roadmap/${rm.id}`} 
+                    key={rm.id} 
+                    style={{ textDecoration: "none", color: "inherit" }}
+                  >
+                    <div 
+                      className="glass-card glass-card-interactive" 
+                      style={{ 
+                        padding: "1.75rem", 
+                        display: "flex", 
+                        flexDirection: "column", 
+                        gap: "1.25rem", 
+                        height: "100%",
+                        borderLeft: isExam ? "4px solid var(--accent-amber)" : "4px solid var(--accent-primary)"
+                      }}
+                    >
                       <div className="flex-between">
                         <span className={`badge ${isExam ? 'badge-warning' : 'badge-primary'}`}>
-                          {isExam ? '🎯 EXAM' : '🎓 COURSE'}
+                          {isExam ? '🎯 EXAM PLAN' : '🎓 COURSE'}
                         </span>
-                        <span className="text-muted" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                          <Clock size={14} /> {rm.dailyStudyTime}m/day
+                        <span className="text-muted text-xs" style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                          <Clock size={13} /> {rm.dailyStudyTime}m/day
                         </span>
                       </div>
-                      
+
                       <div>
                         <h3 className="text-xl mb-1">{rm.title}</h3>
-                        <p className="text-muted" style={{ fontSize: '0.9rem' }}>{rm.subject}</p>
+                        <p className="text-muted text-sm">{rm.subject}</p>
                       </div>
 
                       {isExam && rm.examDate && (
-                        <div style={{ fontSize: '0.875rem', color: 'var(--text-color)' }}>
-                          <strong>Target Date:</strong> {new Date(rm.examDate).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                        <div style={{ fontSize: "0.85rem", color: "var(--accent-amber)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                          <Calendar size={14} /> Target: {new Date(rm.examDate).toLocaleDateString(undefined, { dateStyle: "medium" })}
                         </div>
                       )}
 
-                      <div style={{ marginTop: 'auto' }}>
-                        <div className="flex-between mb-2" style={{ fontSize: '0.875rem' }}>
-                          <span className="text-muted">Progress</span>
-                          <span style={{ color: isExam ? 'var(--warning)' : 'var(--primary)', fontWeight: 'bold' }}>{progress}%</span>
+                      <div style={{ marginTop: "auto" }}>
+                        <div className="flex-between mb-2 text-xs">
+                          <span className="text-muted">{completed} / {total} milestones unlocked</span>
+                          <span style={{ fontWeight: 700, color: isExam ? "var(--accent-amber)" : "var(--accent-primary)" }}>
+                            {progress}%
+                          </span>
                         </div>
-                        <div style={{ width: '100%', backgroundColor: 'var(--secondary)', borderRadius: '999px', height: '8px', overflow: 'hidden' }}>
-                          <div style={{ width: `${progress}%`, backgroundColor: isExam ? 'var(--warning)' : 'var(--primary)', height: '100%', transition: 'width 0.5s ease' }}></div>
+                        <div style={{ width: "100%", backgroundColor: "rgba(255,255,255,0.06)", borderRadius: "999px", height: "8px", overflow: "hidden" }}>
+                          <div 
+                            style={{ 
+                              width: `${progress}%`, 
+                              backgroundColor: isExam ? "var(--accent-amber)" : "var(--accent-primary)", 
+                              height: "100%", 
+                              transition: "width 0.6s ease" 
+                            }} 
+                          />
                         </div>
                       </div>
                     </div>
                   </Link>
-                )
-              })
-            )}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </main>
 
-      {/* Modals */}
+      {/* Roadmap Creation Modal */}
       {activeModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div className="glass-card" style={{ width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+        <div 
+          style={{ 
+            position: "fixed", 
+            inset: 0, 
+            background: "rgba(8, 11, 24, 0.85)", 
+            backdropFilter: "blur(12px)", 
+            zIndex: 1000, 
+            display: "flex", 
+            alignItems: "center", 
+            justifyContent: "center", 
+            padding: "1rem" 
+          }}
+        >
+          <div 
+            className="glass-card" 
+            style={{ 
+              width: "100%", 
+              maxWidth: "620px", 
+              maxHeight: "92vh", 
+              overflowY: "auto", 
+              position: "relative",
+              padding: "2.5rem 2.25rem"
+            }}
+          >
             <button 
               onClick={() => setActiveModal(null)}
-              style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+              disabled={isCreating}
+              style={{ 
+                position: "absolute", 
+                top: "1.5rem", 
+                right: "1.5rem", 
+                background: "transparent", 
+                border: "none", 
+                cursor: "pointer", 
+                color: "var(--text-muted)" 
+              }}
+              aria-label="Close modal"
             >
-              <X size={24} />
+              <X size={22} />
             </button>
-            
-            <h2 className={`text-2xl mb-2 ${activeModal === 'EXAM' ? 'text-accent' : 'text-primary'}`}>
-              {activeModal === 'COURSE' ? '🎓 Start a Course' : '🎯 Exam Preparation'}
-            </h2>
-            <p className="text-muted mb-6">
-              {activeModal === 'COURSE' 
-                ? 'Enter the subject you want to master. Our AI will build a comprehensive curriculum.'
-                : 'Enter your exam details. Our AI will build a strategic schedule to ensure you are ready.'}
-            </p>
+
+            <div style={{ marginBottom: "1.5rem" }}>
+              <span className={`badge ${activeModal === 'EXAM' ? 'badge-warning' : 'badge-primary'} mb-2`}>
+                {activeModal === 'COURSE' ? '🎓 Self-Paced Track' : '🎯 Exam Timeline Track'}
+              </span>
+              <h2 className="text-2xl mb-1">
+                {activeModal === 'COURSE' ? 'Create Course Curriculum' : 'Build Exam Study Schedule'}
+              </h2>
+              <p className="text-muted text-sm">
+                {activeModal === 'COURSE' 
+                  ? 'Our Neural AI analyzes your syllabus or subject to build structured learning milestones.' 
+                  : 'Specify your target exam date and daily commitment for an optimal timeline.'}
+              </p>
+            </div>
+
+            {/* Quick Preset Subject Chips */}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label className="form-label" style={{ fontSize: "0.8rem", textTransform: "uppercase" }}>
+                Quick Subject Templates
+              </label>
+              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                {popularSubjects.map(sub => (
+                  <button
+                    key={sub.name}
+                    type="button"
+                    onClick={() => selectPresetSubject(sub)}
+                    className="btn btn-outline"
+                    style={{ 
+                      fontSize: "0.8rem", 
+                      padding: "0.35rem 0.75rem",
+                      borderColor: formData.subject === sub.name ? "var(--accent-primary)" : "var(--border-subtle)",
+                      background: formData.subject === sub.name ? "rgba(96, 165, 250, 0.2)" : undefined
+                    }}
+                  >
+                    {sub.name}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <form onSubmit={(e) => handleCreate(e, activeModal)}>
               <div className="form-group">
-                <label className="form-label">Roadmap Title</label>
-                <input required className="form-input" placeholder={activeModal === 'COURSE' ? "e.g. Master Python 101" : "e.g. CS Final Exam Prep"} value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                <label className="form-label">Roadmap Title *</label>
+                <input 
+                  required 
+                  className="form-input" 
+                  placeholder={activeModal === 'COURSE' ? "e.g. Master Python 101 & Data Structures" : "e.g. CS50 Final Exam Preparation"} 
+                  value={formData.title} 
+                  onChange={e => setFormData({...formData, title: e.target.value})} 
+                />
               </div>
+
               <div className="form-group">
-                <label className="form-label">Subject / Topic</label>
-                <input required className="form-input" placeholder="e.g. Python, DBMS, Machine Learning" value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})} />
+                <label className="form-label">Subject / Topic *</label>
+                <input 
+                  required 
+                  className="form-input" 
+                  placeholder="e.g. Python, DBMS, Machine Learning, Operating Systems" 
+                  value={formData.subject} 
+                  onChange={e => setFormData({...formData, subject: e.target.value})} 
+                />
               </div>
-              
+
               <div className="form-group">
-                <label className="form-label">Syllabus / Goals (Optional)</label>
-                <textarea className="form-input form-textarea" placeholder="Paste your syllabus or specific topics you want to cover..." value={formData.syllabus} onChange={e => setFormData({...formData, syllabus: e.target.value})} />
+                <label className="form-label">Syllabus / Specific Topics (Optional)</label>
+                <textarea 
+                  className="form-input form-textarea" 
+                  placeholder="Paste your syllabus, topic list, or bullet points here to guide the milestone structure..." 
+                  value={formData.syllabus} 
+                  onChange={e => setFormData({...formData, syllabus: e.target.value})} 
+                />
               </div>
 
               {activeModal === 'EXAM' && (
                 <div className="form-group">
-                  <label className="form-label">Exam Date <span className="text-error">*</span></label>
-                  <input required type="date" className="form-input" value={formData.examDate} onChange={e => setFormData({...formData, examDate: e.target.value})} />
+                  <label className="form-label">Target Examination Date *</label>
+                  <input 
+                    required 
+                    type="date" 
+                    min={new Date().toISOString().split('T')[0]}
+                    className="form-input" 
+                    value={formData.examDate} 
+                    onChange={e => setFormData({...formData, examDate: e.target.value})} 
+                  />
                 </div>
               )}
 
               <div className="form-group">
-                <label className="form-label">Available Study Time (minutes per day) <span className="text-error">*</span></label>
-                <input required type="number" min="15" className="form-input" value={formData.dailyStudyTime} onChange={e => setFormData({...formData, dailyStudyTime: e.target.value})} />
+                <div className="flex-between mb-2">
+                  <label className="form-label" style={{ margin: 0 }}>Available Daily Study Time (Minutes) *</label>
+                  <div style={{ display: "flex", gap: "0.35rem" }}>
+                    {["30", "45", "60", "90"].map(m => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setFormData({...formData, dailyStudyTime: m})}
+                        className="badge badge-neutral"
+                        style={{ 
+                          cursor: "pointer", 
+                          background: formData.dailyStudyTime === m ? "var(--accent-primary)" : undefined,
+                          color: formData.dailyStudyTime === m ? "#080B18" : undefined
+                        }}
+                      >
+                        {m}m
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <input 
+                  required 
+                  type="number" 
+                  min="15" 
+                  max="480"
+                  className="form-input" 
+                  value={formData.dailyStudyTime} 
+                  onChange={e => setFormData({...formData, dailyStudyTime: e.target.value})} 
+                />
               </div>
-              
-              <button type="submit" disabled={isCreating} className={`btn ${activeModal === 'EXAM' ? 'btn-accent' : 'btn-primary'} mt-4`} style={{ width: '100%' }}>
-                {isCreating ? <><Loader2 className="animate-spin" /> Generating AI Curriculum...</> : 'Generate AI Roadmap'}
+
+              <button 
+                type="submit" 
+                disabled={isCreating} 
+                className={`btn ${activeModal === 'EXAM' ? 'btn-accent' : 'btn-primary'} mt-4`} 
+                style={{ width: "100%", padding: "1rem" }}
+              >
+                {isCreating ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", justifyContent: "center" }}>
+                    <Loader2 className="animate-spin" size={20} />
+                    <span>{creationStep}</span>
+                  </div>
+                ) : (
+                  <>
+                    <BrainCircuit size={18} /> Generate AI Roadmap
+                  </>
+                )}
               </button>
             </form>
           </div>
         </div>
       )}
-
-      <style dangerouslySetInnerHTML={{__html: `
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        .animate-spin { animation: spin 1s linear infinite; }
-      `}} />
     </>
   );
 }
