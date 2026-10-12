@@ -19,7 +19,7 @@ import {
   Sparkles
 } from "lucide-react";
 
-export function ForgotPasswordModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+function ForgotPasswordModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
 
