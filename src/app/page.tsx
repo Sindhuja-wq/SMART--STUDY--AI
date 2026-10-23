@@ -200,7 +200,7 @@ export default function Home() {
                     <span className="badge badge-primary" style={{ fontSize: "0.65rem" }}>Llama 3.2 Engine</span>
                   </div>
                   <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginTop: "0.3rem" }}>
-                    "Ready to generate customized study roadmaps & assess topic mastery."
+                    &ldquo;Ready to generate customized study roadmaps &amp; assess topic mastery.&rdquo;
                   </div>
                 </div>
               </div>

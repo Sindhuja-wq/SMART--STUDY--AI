@@ -926,3 +926,177 @@ h1, h2, h3, h4, h5, h6 {
   .video-card { flex-direction: column; text-align: center; }
   .video-thumbnail { width: 100%; height: auto; aspect-ratio: 16/9; }
 }
+
+/* ========================================================
+   STUDY NOTES & MARKDOWN DISPLAY SYSTEM
+   ======================================================== */
+.markdown-notes {
+  color: var(--text-main);
+  line-height: 1.75;
+  font-size: 1rem;
+}
+
+.markdown-notes h1 {
+  font-size: 1.85rem;
+  font-weight: 800;
+  margin-top: 1rem;
+  margin-bottom: 1.25rem;
+  color: var(--text-main);
+  background: linear-gradient(135deg, #F8FAFC 0%, var(--accent-primary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  line-height: 1.3;
+}
+
+.markdown-notes h2 {
+  font-size: 1.45rem;
+  font-weight: 700;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  color: #F1F5F9;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 0.5rem;
+}
+
+.markdown-notes h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+  color: var(--accent-highlight);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.markdown-notes h4 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-top: 1.25rem;
+  margin-bottom: 0.5rem;
+  color: var(--accent-primary);
+}
+
+.markdown-notes p {
+  margin-bottom: 1.15rem;
+  color: var(--text-secondary);
+}
+
+.markdown-notes strong {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.markdown-notes em {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.markdown-notes hr {
+  border: none;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-medium), transparent);
+  margin: 2rem 0;
+}
+
+/* Blockquotes / Alerts */
+.markdown-notes blockquote {
+  margin: 1.25rem 0;
+  padding: 1rem 1.25rem;
+  background: rgba(96, 165, 250, 0.08);
+  border-left: 4px solid var(--accent-primary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--text-main);
+}
+
+.markdown-notes blockquote p {
+  margin-bottom: 0;
+  color: #E2E8F0;
+  font-size: 0.95rem;
+}
+
+/* Unordered & Ordered Lists */
+.markdown-notes ul,
+.markdown-notes ol {
+  margin-top: 0.5rem;
+  margin-bottom: 1.25rem;
+  padding-left: 1.75rem;
+}
+
+.markdown-notes li {
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+}
+
+.markdown-notes li strong {
+  color: var(--text-main);
+}
+
+/* Code Blocks & Syntax */
+.markdown-notes pre {
+  margin: 1.25rem 0;
+  padding: 1.25rem;
+  background: rgba(8, 11, 24, 0.95);
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.markdown-notes pre code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', Courier, monospace;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #E0E7FF;
+  background: transparent;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  display: block;
+}
+
+.markdown-notes code:not(pre code) {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', Courier, monospace;
+  font-size: 0.88rem;
+  background: rgba(96, 165, 250, 0.14);
+  color: var(--accent-highlight);
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  border: 1px solid rgba(103, 232, 249, 0.2);
+}
+
+/* Tables */
+.markdown-notes table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1.5rem 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  background: rgba(17, 23, 43, 0.6);
+  font-size: 0.92rem;
+}
+
+.markdown-notes th {
+  background: rgba(96, 165, 250, 0.12);
+  color: var(--text-main);
+  font-weight: 700;
+  padding: 0.85rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-medium);
+}
+
+.markdown-notes td {
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.markdown-notes tr:last-child td {
+  border-bottom: none;
+}
+
+.markdown-notes tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}

@@ -6,31 +6,42 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { 
-  Plus, 
-  BookOpen, 
   Loader2, 
   GraduationCap, 
   Target, 
   Clock, 
   ArrowRight, 
   X, 
-  Sparkles, 
   Calendar, 
-  CheckCircle2, 
   Flame, 
   TrendingUp, 
   Compass, 
-  BookMarked,
-  BrainCircuit,
-  Award,
-  Layers,
-  Search
+  BrainCircuit, 
+  Layers 
 } from "lucide-react";
+
+interface RoadmapTopic {
+  id: string;
+  title: string;
+  isUnlocked: boolean;
+  quizScore?: number | null;
+}
+
+interface RoadmapSummary {
+  id: string;
+  title: string;
+  subject: string;
+  type: "EXAM" | "COURSE";
+  dailyStudyTime: number;
+  examDate?: string | null;
+  createdAt: string;
+  topics: RoadmapTopic[];
+}
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [roadmaps, setRoadmaps] = useState<any[]>([]);
+  const [roadmaps, setRoadmaps] = useState<RoadmapSummary[]>([]);
   const [loading, setLoading] = useState(true);
   
   // UI State
@@ -57,6 +68,20 @@ export default function Dashboard() {
     { name: "System Design", title: "Distributed Systems & Cloud Scalability", time: "45" },
   ];
 
+  const fetchRoadmaps = async () => {
+    try {
+      const res = await fetch("/api/roadmap");
+      if (res.ok) {
+        const data = (await res.json()) as { roadmaps?: RoadmapSummary[] };
+        setRoadmaps(data.roadmaps || []);
+      }
+    } catch (err: unknown) {
+      console.error("Error fetching roadmaps:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login");
@@ -64,20 +89,6 @@ export default function Dashboard() {
       fetchRoadmaps();
     }
   }, [status, router]);
-
-  const fetchRoadmaps = async () => {
-    try {
-      const res = await fetch("/api/roadmap");
-      if (res.ok) {
-        const data = await res.json();
-        setRoadmaps(data.roadmaps || []);
-      }
-    } catch (err) {
-      console.error("Error fetching roadmaps:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const selectPresetSubject = (sub: typeof popularSubjects[0]) => {
     setFormData(prev => ({

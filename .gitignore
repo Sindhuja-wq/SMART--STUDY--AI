@@ -45,3 +45,6 @@ next-env.d.ts
 
 # scratch files
 scratch_test.js
+
+# untracked duplicate clone
+SMART--STUDY--AI/

@@ -2,50 +2,72 @@
 
 import { useState, useEffect } from "react";
 import { 
-  CheckCircle2, 
-  Circle, 
   Loader2, 
   RefreshCw, 
   AlertCircle, 
   Award, 
-  HelpCircle, 
-  Sparkles,
-  ArrowRight,
-  RotateCcw,
-  Check,
-  X
+  Sparkles, 
+  ArrowRight, 
+  RotateCcw, 
+  Check, 
+  X 
 } from "lucide-react";
 
+interface QuestionItem {
+  id: string;
+  topicId?: string;
+  text: string;
+  options: string;
+  correctOption: number;
+  explanation?: string | null;
+  isActive?: boolean;
+}
+
+interface QuizSubmissionResult {
+  success: boolean;
+  score: number;
+  correctCount?: number;
+  total?: number;
+  unlockedNext?: boolean;
+  questions?: QuestionItem[];
+}
+
 export function Quiz({ topicId, onComplete }: { topicId: string; onComplete: () => void }) {
-  const [questions, setQuestions] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<QuestionItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState("");
   const [answers, setAnswers] = useState<Record<string, number>>({});
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<QuizSubmissionResult | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Check if questions already exist on mount
+  // Check if questions already exist on mount using safe effect pattern
   useEffect(() => {
-    fetchExistingQuiz();
-  }, [topicId]);
+    let ignore = false;
 
-  const fetchExistingQuiz = async () => {
-    try {
-      const res = await fetch("/api/quiz/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topicId, forceRegenerate: false, checkOnly: true }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.questions && data.questions.length > 0) {
-          setQuestions(data.questions);
+    const fetchExisting = async () => {
+      try {
+        const res = await fetch("/api/quiz/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ topicId, forceRegenerate: false, checkOnly: true }),
+        });
+        if (res.ok && !ignore) {
+          const data = (await res.json()) as { questions?: QuestionItem[] };
+          if (data.questions && data.questions.length > 0) {
+            setQuestions(data.questions);
+          }
         }
+      } catch (err: unknown) {
+        console.error("Error fetching existing quiz:", err);
       }
-    } catch (err) {
-      console.error(err);
-    }
-  };
+    };
+
+    void fetchExisting();
+
+    return () => {
+      ignore = true;
+    };
+  }, [topicId]);
 
   const startQuiz = async (forceRegenerate = false) => {
     if (loading) return;
@@ -83,7 +105,7 @@ export function Quiz({ topicId, onComplete }: { topicId: string; onComplete: () 
         const data = await res.json().catch(() => ({}));
         setErrorMessage(data.error || "Failed to generate assessment.");
       }
-    } catch (err) {
+    } catch (_err: unknown) {
       clearInterval(stepInterval);
       setErrorMessage("Network error while generating quiz.");
     } finally {
@@ -103,16 +125,16 @@ export function Quiz({ topicId, onComplete }: { topicId: string; onComplete: () 
         body: JSON.stringify({ topicId, answers }),
       });
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as QuizSubmissionResult;
         setResult(data);
         if (data.unlockedNext) {
           onComplete(); // refresh parent roadmap
         }
       } else {
-        const errData = await res.json().catch(() => ({}));
+        const errData = (await res.json().catch(() => ({}))) as { error?: string };
         setErrorMessage(errData.error || "Failed to submit assessment.");
       }
-    } catch (err) {
+    } catch (_err: unknown) {
       setErrorMessage("Network error while submitting quiz.");
     } finally {
       setLoading(false);
@@ -215,8 +237,8 @@ export function Quiz({ topicId, onComplete }: { topicId: string; onComplete: () 
             Question Review & AI Explanations
           </h4>
 
-          {result.questions && result.questions.map((q: any, i: number) => {
-            const opts = JSON.parse(q.options);
+          {result.questions && result.questions.map((q: QuestionItem, i: number) => {
+            const opts = JSON.parse(q.options) as string[];
             const userAns = answers[q.id];
             const isCorrect = userAns === q.correctOption;
 

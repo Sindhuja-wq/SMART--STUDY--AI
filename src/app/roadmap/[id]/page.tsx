@@ -24,8 +24,32 @@ import {
   Sparkles,
   Award,
   Layers,
-  GraduationCap
+  GraduationCap,
+  RefreshCw
 } from "lucide-react";
+
+interface TopicItem {
+  id: string;
+  title: string;
+  theory: string;
+  notes?: string | null;
+  videoUrl?: string | null;
+  timeEstimate?: number | null;
+  difficulty?: string | null;
+  order: number;
+  isUnlocked: boolean;
+  quizScore?: number | null;
+}
+
+interface RoadmapDetail {
+  id: string;
+  title: string;
+  subject: string;
+  type: "EXAM" | "COURSE";
+  dailyStudyTime: number;
+  examDate?: string | null;
+  topics: TopicItem[];
+}
 
 export default function RoadmapViewPage() {
   return (
@@ -46,7 +70,7 @@ function RoadmapView() {
   const { status } = useSession();
   const router = useRouter();
   const params = useParams();
-  const [roadmap, setRoadmap] = useState<any>(null);
+  const [roadmap, setRoadmap] = useState<RoadmapDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTopic, setActiveTopic] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"NOTES" | "VIDEO" | "PRACTICE">("NOTES");
@@ -57,19 +81,19 @@ function RoadmapView() {
     try {
       const res = await fetch(`/api/roadmap/${params.id}`);
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as { roadmap: RoadmapDetail };
         setRoadmap(data.roadmap);
         
         // Preload saved notes
         const savedNotes: Record<string, string> = {};
-        data.roadmap.topics.forEach((t: any) => {
+        data.roadmap.topics.forEach((t: TopicItem) => {
           if (t.notes) savedNotes[t.id] = t.notes;
         });
         setTopicNotes(savedNotes);
 
         // Auto-open first unlocked topic if none is selected
         if (!activeTopic && data.roadmap.topics.length > 0) {
-          const firstUnlocked = data.roadmap.topics.find((t: any) => t.isUnlocked && (!t.quizScore || t.quizScore < 80)) || data.roadmap.topics[0];
+          const firstUnlocked = data.roadmap.topics.find((t: TopicItem) => t.isUnlocked && (!t.quizScore || t.quizScore < 80)) || data.roadmap.topics[0];
           if (firstUnlocked && firstUnlocked.isUnlocked) {
             setActiveTopic(firstUnlocked.id);
             if (!savedNotes[firstUnlocked.id]) {
@@ -78,7 +102,7 @@ function RoadmapView() {
           }
         }
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Error loading roadmap:", err);
     } finally {
       setLoading(false);
@@ -86,17 +110,21 @@ function RoadmapView() {
   };
 
   useEffect(() => {
+    let ignore = false;
     if (status === "unauthenticated") {
       router.push("/login");
-    } else if (status === "authenticated") {
-      fetchRoadmap();
+    } else if (status === "authenticated" && !ignore) {
+      void fetchRoadmap();
     }
+    return () => {
+      ignore = true;
+    };
   }, [status, router, params.id]);
 
   const generatingNotesRef = useRef<Set<string>>(new Set());
 
-  const loadNotes = async (topicId: string) => {
-    if (topicNotes[topicId]) return;
+  const loadNotes = async (topicId: string, force = false) => {
+    if (!force && topicNotes[topicId]) return;
     if (generatingNotesRef.current.has(topicId)) return;
     
     generatingNotesRef.current.add(topicId);
@@ -105,7 +133,7 @@ function RoadmapView() {
       const res = await fetch("/api/notes/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topicId })
+        body: JSON.stringify({ topicId, forceRegenerate: force })
       });
       if (res.ok) {
         const data = await res.json();
@@ -139,7 +167,7 @@ function RoadmapView() {
   }
 
   const isExam = roadmap.type === "EXAM";
-  const completedTopics = roadmap.topics.filter((t: any) => t.isUnlocked && t.quizScore && t.quizScore >= 80).length;
+  const completedTopics = roadmap.topics.filter((t: TopicItem) => t.isUnlocked && t.quizScore && t.quizScore >= 80).length;
   const progress = roadmap.topics.length > 0 ? Math.round((completedTopics / roadmap.topics.length) * 100) : 0;
   
   let daysLeft = 0;
@@ -148,8 +176,7 @@ function RoadmapView() {
   }
 
   // Find index of active topic for next/prev navigation
-  const activeTopicIndex = roadmap.topics.findIndex((t: any) => t.id === activeTopic);
-  const activeTopicObj = activeTopicIndex !== -1 ? roadmap.topics[activeTopicIndex] : null;
+  // Topic navigation helper
 
   const navigateToTopic = (index: number) => {
     if (index >= 0 && index < roadmap.topics.length) {
@@ -269,8 +296,8 @@ function RoadmapView() {
         </div>
 
         <div className="roadmap-timeline">
-          {roadmap.topics.map((topic: any, index: number) => {
-            const isCompleted = topic.isUnlocked && topic.quizScore !== null && topic.quizScore >= 80;
+          {roadmap.topics.map((topic: TopicItem, index: number) => {
+            const isCompleted = topic.isUnlocked && typeof topic.quizScore === 'number' && topic.quizScore >= 80;
             const isLocked = !topic.isUnlocked;
             const isExpanded = activeTopic === topic.id;
 
@@ -353,7 +380,7 @@ function RoadmapView() {
                         </div>
                       )}
                       
-                      {topic.quizScore !== null && (
+                      {typeof topic.quizScore === "number" && (
                         <div 
                           className="badge"
                           style={{
@@ -414,6 +441,22 @@ function RoadmapView() {
                               </div>
                             ) : topicNotes[topic.id] ? (
                               <div>
+                                <div className="flex-between mb-4" style={{ flexWrap: "wrap", gap: "0.5rem", borderBottom: "1px solid var(--border-subtle)", paddingBottom: "0.75rem" }}>
+                                  <span className="badge badge-primary" style={{ fontSize: "0.8rem", gap: "0.35rem" }}>
+                                    <BookOpen size={13} /> Curriculum Study Notes
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={notesGenerating}
+                                    onClick={() => loadNotes(topic.id, true)}
+                                    className="btn btn-ghost"
+                                    style={{ padding: "0.35rem 0.75rem", fontSize: "0.8rem", gap: "0.4rem" }}
+                                    title="Regenerate notes with fresh curriculum coverage"
+                                  >
+                                    {notesGenerating ? <Loader2 className="animate-spin" size={13} /> : <RefreshCw size={13} />}
+                                    Regenerate Notes
+                                  </button>
+                                </div>
                                 <ReactMarkdown>{topicNotes[topic.id]}</ReactMarkdown>
                                 
                                 {/* Call to action after reading notes */}

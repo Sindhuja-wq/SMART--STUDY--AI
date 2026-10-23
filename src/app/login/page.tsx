@@ -294,7 +294,7 @@ export default function Login() {
               }}
             >
               <p className="text-muted text-sm">
-                Don't have an account yet?{" "}
+                Don&apos;t have an account yet?{" "}
                 <Link 
                   href="/register" 
                   style={{ 

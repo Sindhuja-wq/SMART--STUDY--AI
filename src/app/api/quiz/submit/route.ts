@@ -10,22 +10,41 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { topicId, answers } = await req.json(); 
-    // answers = { [questionId]: selectedOptionIndex }
+    const { topicId, answers } = (await req.json()) as {
+      topicId?: string;
+      answers?: Record<string, number>;
+    };
 
+    if (!topicId || !answers || typeof answers !== "object") {
+      return NextResponse.json({ error: "Topic ID and answers object required" }, { status: 400 });
+    }
+
+    // Only include currently active questions for scoring
     const topic = await prisma.topic.findUnique({
       where: { id: topicId },
-      include: { questions: true, roadmap: { include: { topics: { orderBy: { order: 'asc' } } } } }
+      include: {
+        questions: { where: { isActive: true } },
+        roadmap: {
+          include: {
+            topics: { orderBy: { order: "asc" } },
+          },
+        },
+      },
     });
 
     if (!topic || topic.roadmap.userId !== session.user.id) {
       return NextResponse.json({ error: "Topic not found or unauthorized" }, { status: 404 });
     }
 
-    let correctCount = 0;
-    const total = topic.questions.length;
+    const activeQuestions = topic.questions;
+    const total = activeQuestions.length;
 
-    topic.questions.forEach((q) => {
+    if (total === 0) {
+      return NextResponse.json({ error: "No active assessment questions found for this topic" }, { status: 400 });
+    }
+
+    let correctCount = 0;
+    activeQuestions.forEach((q) => {
       if (answers[q.id] === q.correctOption) {
         correctCount++;
       }
@@ -33,29 +52,39 @@ export async function POST(req: Request) {
 
     const score = Math.round((correctCount / total) * 100);
 
-    // Update topic score
+    // Update topic score in database
     await prisma.topic.update({
       where: { id: topicId },
-      data: { quizScore: score }
+      data: { quizScore: score },
     });
 
-    // If score >= 80, unlock next topic
+    // If score >= 80% (4 out of 5), unlock the next topic in sequence
     let unlockedNext = false;
     if (score >= 80) {
       const allTopics = topic.roadmap.topics;
-      const currentIndex = allTopics.findIndex(t => t.id === topicId);
+      const currentIndex = allTopics.findIndex((t) => t.id === topicId);
       if (currentIndex !== -1 && currentIndex + 1 < allTopics.length) {
         const nextTopic = allTopics[currentIndex + 1];
-        await prisma.topic.update({
-          where: { id: nextTopic.id },
-          data: { isUnlocked: true }
-        });
-        unlockedNext = true;
+        if (!nextTopic.isUnlocked) {
+          await prisma.topic.update({
+            where: { id: nextTopic.id },
+            data: { isUnlocked: true },
+          });
+          unlockedNext = true;
+        }
       }
     }
 
-    return NextResponse.json({ success: true, score, unlockedNext, questions: topic.questions });
-  } catch (error) {
+    return NextResponse.json({
+      success: true,
+      score,
+      correctCount,
+      total,
+      unlockedNext,
+      questions: activeQuestions,
+    });
+  } catch (error: unknown) {
+    console.error("Quiz submission error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

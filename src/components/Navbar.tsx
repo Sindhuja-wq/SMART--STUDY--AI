@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { BookOpen, LogOut, User, Sparkles, Shield, Compass, LayoutDashboard } from "lucide-react";
+import { BookOpen, LogOut, Sparkles, Shield, LayoutDashboard } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 
 export function Navbar() {
   const { data: session } = useSession();
-  const isAdmin = (session?.user as any)?.role === "ADMIN";
+  const isAdmin = session?.user?.role === "ADMIN";
 
   return (
     <nav className="navbar">

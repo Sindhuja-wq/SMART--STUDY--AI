@@ -1,3 +1,3 @@
 declare module "prisma/config" {
-  export function definePrismaConfig(config: any): any;
+  export function definePrismaConfig(config: unknown): unknown;
 }

@@ -6,73 +6,81 @@ import crypto from "crypto";
 
 export async function POST(req: Request) {
   try {
-    const { name, email, password, role } = await req.json();
+    const { name, email, password } = (await req.json()) as {
+      name?: string;
+      email?: string;
+      password?: string;
+    };
 
     if (!email || !password || !name) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+      return NextResponse.json({ error: "Missing required fields (name, email, password)" }, { status: 400 });
+    }
+
+    const trimmedEmail = email.toLowerCase().trim();
+    const trimmedName = name.trim();
+
+    if (password.length < 6) {
+      return NextResponse.json({ error: "Password must be at least 6 characters long." }, { status: 400 });
     }
 
     let existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { email: trimmedEmail },
     });
 
-    if (existingUser) {
-      if (existingUser.isVerified) {
-        return NextResponse.json({ error: "User already exists" }, { status: 400 });
-      }
-      // If not verified, we can regenerate OTP for them
+    if (existingUser && existingUser.isVerified) {
+      return NextResponse.json({ error: "An account with this email already exists." }, { status: 400 });
     }
 
     const otpCode = crypto.randomInt(100000, 999999).toString();
-    const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-
+    const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
     const hashedPassword = await bcrypt.hash(password, 10);
 
     if (existingUser) {
-      if (existingUser.otpAttempts >= 5) {
-        return NextResponse.json({ error: "Maximum OTP attempts reached. Try again later." }, { status: 429 });
-      }
-      
-      // Cooldown of 60 seconds
-      if (existingUser.lastOtpSentAt && (Date.now() - existingUser.lastOtpSentAt.getTime() < 60000)) {
-        return NextResponse.json({ error: "Please wait 60 seconds before requesting another OTP." }, { status: 429 });
+      // Cooldown of 60 seconds between resend requests
+      if (existingUser.lastOtpSentAt && Date.now() - existingUser.lastOtpSentAt.getTime() < 60000) {
+        return NextResponse.json({ error: "Please wait 60 seconds before requesting another verification code." }, { status: 429 });
       }
 
       existingUser = await prisma.user.update({
-        where: { email },
+        where: { email: trimmedEmail },
         data: {
           password: hashedPassword,
-          name,
+          name: trimmedName,
           otpCode,
           otpExpiresAt,
-          otpAttempts: existingUser.otpAttempts + 1,
+          otpAttempts: 0, // Reset attempt counter on fresh OTP generation
           lastOtpSentAt: new Date(),
         },
       });
     } else {
+      // CRITICAL SECURITY: Public registration must always strictly create "USER" role.
+      // Admin privileges cannot be assigned via client request payloads.
       existingUser = await prisma.user.create({
         data: {
-          name,
-          email,
+          name: trimmedName,
+          email: trimmedEmail,
           password: hashedPassword,
-          role: role === "ADMIN" ? "ADMIN" : "USER",
+          role: "USER",
           otpCode,
           otpExpiresAt,
-          otpAttempts: 1,
+          otpAttempts: 0,
           lastOtpSentAt: new Date(),
         },
       });
     }
 
     try {
-      await sendOtpEmail(email, otpCode);
-      return NextResponse.json({ success: true, message: "OTP sent successfully. Please check your email." });
-    } catch (emailError: any) {
-      // If email failed, do not claim success.
-      return NextResponse.json({ error: "Failed to send OTP email. Please check provider configuration." }, { status: 500 });
+      await sendOtpEmail(trimmedEmail, otpCode);
+      return NextResponse.json({ success: true, message: "Verification code sent to your email." });
+    } catch (emailError: unknown) {
+      console.warn("Failed to deliver OTP email:", emailError);
+      return NextResponse.json(
+        { error: "Failed to send verification email. Please verify SMTP configuration or try again." },
+        { status: 500 }
+      );
     }
-  } catch (error) {
-    console.error("Register error:", error);
+  } catch (error: unknown) {
+    console.error("Register API error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

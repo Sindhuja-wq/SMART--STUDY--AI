@@ -9,49 +9,53 @@ import {
   Users, 
   Shield, 
   BookOpen, 
-  Clock, 
-  Search, 
   Loader2, 
   CheckCircle2, 
   ArrowLeft,
-  GraduationCap,
-  Sparkles,
-  BarChart3,
-  Calendar
+  BarChart3
 } from "lucide-react";
+
+interface AdminStudent {
+  id: string;
+  name?: string | null;
+  email: string;
+  createdAt: string;
+  isVerified: boolean;
+  _count?: { roadmaps: number };
+}
 
 export default function AdminDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<AdminStudent[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const fetchUsers = async () => {
+    try {
+      const res = await fetch("/api/admin/users");
+      if (res.ok) {
+        const data = (await res.json()) as { users?: AdminStudent[] };
+        setUsers(data.users || []);
+      }
+    } catch (err: unknown) {
+      console.error("Failed to fetch students:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login");
     } else if (status === "authenticated") {
-      if ((session.user as any)?.role !== "ADMIN") {
+      if (session.user.role !== "ADMIN") {
         router.push("/dashboard");
       } else {
         fetchUsers();
       }
     }
   }, [status, router, session]);
-
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch("/api/admin/users");
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data.users || []);
-      }
-    } catch (err) {
-      console.error("Failed to fetch students:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (status === "loading" || loading) {
     return (

@@ -1,10 +1,10 @@
 /**
  * Server-Side AI Provider Client for Smart Study AI
  * Supports:
- * 1. Ollama (Local development or remote hosted endpoint)
- * 2. Groq Cloud (Free tier running open-source Llama models)
- * 3. Google Gemini API (Free tier via Google AI Studio)
- * 4. Graceful fallback when AI services are offline
+ * 1. Groq Cloud (Free tier running high-speed open-source Llama models)
+ * 2. Google Gemini API (Free tier via Google AI Studio)
+ * 3. Ollama (Local development or remote hosted endpoint)
+ * 4. Graceful multi-provider cascade failover
  */
 
 export interface AIGenerationOptions {
@@ -13,39 +13,90 @@ export interface AIGenerationOptions {
   formatJson?: boolean;
   temperature?: number;
   maxTokens?: number;
+  timeoutMs?: number;
+}
+
+interface ProviderAttempt {
+  name: "groq" | "gemini" | "ollama";
+  execute: () => Promise<string | null>;
 }
 
 export async function generateAIContent(options: AIGenerationOptions): Promise<string | null> {
-  const provider = (process.env.AI_PROVIDER || "auto").toLowerCase();
-  const groqKey = process.env.GROQ_API_KEY;
-  const geminiKey = process.env.GEMINI_API_KEY;
-  const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
+  const providerConfig = (process.env.AI_PROVIDER || "auto").toLowerCase().trim();
+  const groqKey = process.env.GROQ_API_KEY?.trim();
+  const geminiKey = process.env.GEMINI_API_KEY?.trim();
+  const ollamaUrl = process.env.OLLAMA_URL?.trim() || "http://localhost:11434";
+  const isVercel = process.env.VERCEL === "1";
 
-  // Determine active provider based on configuration & available keys
-  let targetProvider = provider;
-  if (provider === "auto") {
+  // Build ordered list of providers to attempt
+  const attempts: ProviderAttempt[] = [];
+
+  const addGroq = () => {
     if (groqKey) {
-      targetProvider = "groq";
-    } else if (geminiKey) {
-      targetProvider = "gemini";
-    } else {
-      targetProvider = "ollama";
+      attempts.push({
+        name: "groq",
+        execute: () => callGroqAPI(options, groqKey),
+      });
     }
+  };
+
+  const addGemini = () => {
+    if (geminiKey) {
+      attempts.push({
+        name: "gemini",
+        execute: () => callGeminiAPI(options, geminiKey),
+      });
+    }
+  };
+
+  const addOllama = () => {
+    // In Vercel serverless environment, localhost Ollama does not exist; only attempt if remote URL
+    const isLocalhost = ollamaUrl.includes("localhost") || ollamaUrl.includes("127.0.0.1");
+    if (!isVercel || !isLocalhost) {
+      attempts.push({
+        name: "ollama",
+        execute: () => callOllamaAPI(options, ollamaUrl),
+      });
+    }
+  };
+
+  if (providerConfig === "groq") {
+    addGroq();
+    addGemini();
+    addOllama();
+  } else if (providerConfig === "gemini") {
+    addGemini();
+    addGroq();
+    addOllama();
+  } else if (providerConfig === "ollama") {
+    addOllama();
+    addGroq();
+    addGemini();
+  } else {
+    // Default "auto": Prioritize cloud free tiers (Groq, then Gemini), then Ollama
+    addGroq();
+    addGemini();
+    addOllama();
   }
 
-  try {
-    if (targetProvider === "groq" && groqKey) {
-      return await callGroqAPI(options, groqKey);
-    } else if (targetProvider === "gemini" && geminiKey) {
-      return await callGeminiAPI(options, geminiKey);
-    } else {
-      // Default to Ollama (local or remote URL)
-      return await callOllamaAPI(options, ollamaUrl);
-    }
-  } catch (error: any) {
-    console.warn(`[AI Provider: ${targetProvider}] Request failed:`, error?.message || error);
+  if (attempts.length === 0) {
+    console.warn("[AI Provider] No active AI provider credentials available in environment.");
     return null;
   }
+
+  for (const attempt of attempts) {
+    try {
+      const result = await attempt.execute();
+      if (result && result.trim().length > 0) {
+        return result.trim();
+      }
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.warn(`[AI Provider: ${attempt.name}] Request failed: ${errMsg}. Trying next provider...`);
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -53,17 +104,27 @@ export async function generateAIContent(options: AIGenerationOptions): Promise<s
  */
 async function callOllamaAPI(options: AIGenerationOptions, baseUrl: string): Promise<string | null> {
   const model = process.env.OLLAMA_MODEL || "llama3.2";
+  const timeoutMs = options.timeoutMs ?? 25000;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000); // 12s timeout
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const payload: Record<string, any> = {
+    const payload: {
+      model: string;
+      prompt: string;
+      stream: boolean;
+      format?: string;
+      options: {
+        temperature: number;
+        num_predict: number;
+      };
+    } = {
       model,
       prompt: options.systemPrompt ? `${options.systemPrompt}\n\n${options.prompt}` : options.prompt,
       stream: false,
       options: {
         temperature: options.temperature ?? 0.3,
-        num_predict: options.maxTokens ?? 1200,
+        num_predict: options.maxTokens ?? 2000,
       },
     };
 
@@ -84,7 +145,7 @@ async function callOllamaAPI(options: AIGenerationOptions, baseUrl: string): Pro
       throw new Error(`Ollama returned status ${response.status}`);
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as { response?: string };
     return data.response ? data.response.trim() : null;
   } catch (err) {
     clearTimeout(timeout);
@@ -97,21 +158,28 @@ async function callOllamaAPI(options: AIGenerationOptions, baseUrl: string): Pro
  */
 async function callGroqAPI(options: AIGenerationOptions, apiKey: string): Promise<string | null> {
   const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+  const timeoutMs = options.timeoutMs ?? 25000;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const messages: Array<{ role: string; content: string }> = [];
+    const messages: Array<{ role: "system" | "user"; content: string }> = [];
     if (options.systemPrompt) {
       messages.push({ role: "system", content: options.systemPrompt });
     }
     messages.push({ role: "user", content: options.prompt });
 
-    const payload: Record<string, any> = {
+    const payload: {
+      model: string;
+      messages: Array<{ role: "system" | "user"; content: string }>;
+      temperature: number;
+      max_tokens: number;
+      response_format?: { type: "json_object" };
+    } = {
       model,
       messages,
       temperature: options.temperature ?? 0.3,
-      max_tokens: options.maxTokens ?? 1200,
+      max_tokens: options.maxTokens ?? 2000,
     };
 
     if (options.formatJson) {
@@ -135,7 +203,9 @@ async function callGroqAPI(options: AIGenerationOptions, apiKey: string): Promis
       throw new Error(`Groq returned ${response.status}: ${errText}`);
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
     return data.choices?.[0]?.message?.content?.trim() || null;
   } catch (err) {
     clearTimeout(timeout);
@@ -148,15 +218,23 @@ async function callGroqAPI(options: AIGenerationOptions, apiKey: string): Promis
  */
 async function callGeminiAPI(options: AIGenerationOptions, apiKey: string): Promise<string | null> {
   const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+  const timeoutMs = options.timeoutMs ?? 25000;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const fullPrompt = options.systemPrompt
       ? `${options.systemPrompt}\n\n${options.prompt}`
       : options.prompt;
 
-    const payload: Record<string, any> = {
+    const payload: {
+      contents: Array<{ parts: Array<{ text: string }> }>;
+      generationConfig: {
+        temperature: number;
+        maxOutputTokens: number;
+        responseMimeType?: string;
+      };
+    } = {
       contents: [
         {
           parts: [{ text: fullPrompt }],
@@ -164,7 +242,7 @@ async function callGeminiAPI(options: AIGenerationOptions, apiKey: string): Prom
       ],
       generationConfig: {
         temperature: options.temperature ?? 0.3,
-        maxOutputTokens: options.maxTokens ?? 1200,
+        maxOutputTokens: options.maxTokens ?? 2000,
       },
     };
 
@@ -187,7 +265,9 @@ async function callGeminiAPI(options: AIGenerationOptions, apiKey: string): Prom
       throw new Error(`Gemini returned ${response.status}: ${errText}`);
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
     const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     return candidateText ? candidateText.trim() : null;
   } catch (err) {
