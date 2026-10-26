@@ -48,3 +48,6 @@ scratch_test.js
 
 # untracked duplicate clone
 SMART--STUDY--AI/
+
+# git worktrees
+.worktrees/

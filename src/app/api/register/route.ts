@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { sendOtpEmail } from "@/lib/email";
+import { validateRegistrationEmail } from "@/lib/emailValidator";
 import crypto from "crypto";
 
 export async function POST(req: Request) {
@@ -16,7 +17,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing required fields (name, email, password)" }, { status: 400 });
     }
 
-    const trimmedEmail = email.toLowerCase().trim();
+    const emailValidation = validateRegistrationEmail(email);
+    if (!emailValidation.valid || !emailValidation.sanitizedEmail) {
+      return NextResponse.json(
+        { error: emailValidation.error || "Please provide a valid email address." },
+        { status: 400 }
+      );
+    }
+
+    const trimmedEmail = emailValidation.sanitizedEmail;
     const trimmedName = name.trim();
 
     if (password.length < 6) {

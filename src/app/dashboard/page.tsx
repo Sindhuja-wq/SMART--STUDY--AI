@@ -56,16 +56,20 @@ export default function Dashboard() {
     subject: "", 
     syllabus: "", 
     examDate: "", 
-    dailyStudyTime: "60" 
+    dailyStudyTime: "60",
+    examLevel: "University / College",
+    knowledgeLevel: "Intermediate"
   });
 
   const popularSubjects = [
-    { name: "Python", title: "Master Python 3 & Algorithms", time: "60" },
-    { name: "Java", title: "Comprehensive Java & Data Structures", time: "60" },
-    { name: "DBMS", title: "Database Systems & SQL Optimization", time: "45" },
-    { name: "Machine Learning", title: "Applied ML & Deep Learning Essentials", time: "90" },
-    { name: "React", title: "Modern React 19 & Next.js Architecture", time: "60" },
-    { name: "System Design", title: "Distributed Systems & Cloud Scalability", time: "45" },
+    { name: "Mathematics", title: "Calculus & Linear Algebra Foundations", time: "60" },
+    { name: "Physics", title: "Newtonian Mechanics & Thermodynamics", time: "60" },
+    { name: "Chemistry", title: "Organic Reactions & Chemical Equilibrium", time: "60" },
+    { name: "Biology", title: "Cellular Biology & Molecular Genetics", time: "45" },
+    { name: "World History", title: "Modern World History & Global Revolutions", time: "45" },
+    { name: "English", title: "English Grammar, Syntax & Essay Composition", time: "45" },
+    { name: "Accounting", title: "Financial Accounting & Double-Entry Principles", time: "60" },
+    { name: "Computer Science", title: "Data Structures, Algorithms & Systems", time: "60" },
   ];
 
   const fetchRoadmaps = async () => {
@@ -97,6 +101,19 @@ export default function Dashboard() {
       title: activeModal === "EXAM" ? `${sub.name} Final Exam Prep` : sub.title,
       dailyStudyTime: sub.time
     }));
+  };
+
+  const resetFormForMode = (mode: "COURSE" | "EXAM") => {
+    setActiveModal(mode);
+    setFormData({
+      title: "",
+      subject: "",
+      syllabus: "",
+      examDate: "",
+      dailyStudyTime: "60",
+      examLevel: "University / College",
+      knowledgeLevel: "Intermediate",
+    });
   };
 
   const handleCreate = async (e: React.FormEvent, type: "COURSE" | "EXAM") => {
@@ -267,14 +284,14 @@ export default function Dashboard() {
 
             <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
               <button 
-                onClick={() => { setActiveModal("COURSE"); setFormData({ title: "", subject: "", syllabus: "", examDate: "", dailyStudyTime: "60" }); }}
+                onClick={() => resetFormForMode("COURSE")}
                 className="btn btn-primary"
                 style={{ gap: "0.5rem" }}
               >
                 <GraduationCap size={18} /> New Course
               </button>
               <button 
-                onClick={() => { setActiveModal("EXAM"); setFormData({ title: "", subject: "", syllabus: "", examDate: "", dailyStudyTime: "60" }); }}
+                onClick={() => resetFormForMode("EXAM")}
                 className="btn btn-accent"
                 style={{ gap: "0.5rem" }}
               >
@@ -420,7 +437,7 @@ export default function Dashboard() {
         <div className="grid-2 mb-8">
           <div 
             className="mode-card" 
-            onClick={() => { setActiveModal("COURSE"); setFormData({ title: "", subject: "", syllabus: "", examDate: "", dailyStudyTime: "60" }); }}
+            onClick={() => resetFormForMode("COURSE")}
           >
             <div className="mode-icon-box">🎓</div>
             <div>
@@ -437,7 +454,7 @@ export default function Dashboard() {
 
           <div 
             className="mode-card" 
-            onClick={() => { setActiveModal("EXAM"); setFormData({ title: "", subject: "", syllabus: "", examDate: "", dailyStudyTime: "60" }); }}
+            onClick={() => resetFormForMode("EXAM")}
           >
             <div className="mode-icon-box" style={{ background: "rgba(52, 211, 153, 0.1)", borderColor: "rgba(52, 211, 153, 0.3)" }}>🎯</div>
             <div>
@@ -672,33 +689,76 @@ export default function Dashboard() {
             <form onSubmit={(e) => handleCreate(e, activeModal)}>
               <div className="form-group">
                 <label className="form-label">Roadmap Title *</label>
-                <input 
-                  required 
-                  className="form-input" 
-                  placeholder={activeModal === 'COURSE' ? "e.g. Master Python 101 & Data Structures" : "e.g. CS50 Final Exam Preparation"} 
-                  value={formData.title} 
-                  onChange={e => setFormData({...formData, title: e.target.value})} 
+                <input
+                  required
+                  className="form-input"
+                  placeholder={activeModal === 'COURSE' ? "e.g. Organic Chemistry Reactions or Linear Algebra" : "e.g. Final Board Exam or AP Physics Preparation"}
+                  value={formData.title}
+                  onChange={e => setFormData({...formData, title: e.target.value})}
                 />
               </div>
 
               <div className="form-group">
-                <label className="form-label">Subject / Topic *</label>
-                <input 
-                  required 
-                  className="form-input" 
-                  placeholder="e.g. Python, DBMS, Machine Learning, Operating Systems" 
-                  value={formData.subject} 
-                  onChange={e => setFormData({...formData, subject: e.target.value})} 
+                <label className="form-label">Subject / Discipline *</label>
+                <input
+                  required
+                  className="form-input"
+                  placeholder="e.g. Mathematics, Physics, Biology, History, English, Accounting, Law, Engineering, or any custom subject"
+                  value={formData.subject}
+                  onChange={e => setFormData({...formData, subject: e.target.value})}
                 />
               </div>
 
+              <div className="grid-2" style={{ gap: "1rem" }}>
+                <div className="form-group">
+                  <label className="form-label">Current Knowledge Level</label>
+                  <select
+                    className="form-input"
+                    value={formData.knowledgeLevel}
+                    onChange={e => setFormData({...formData, knowledgeLevel: e.target.value})}
+                  >
+                    <option value="Beginner">Beginner (Foundations)</option>
+                    <option value="Intermediate">Intermediate (Core Concepts)</option>
+                    <option value="Advanced">Advanced (High-Yield Problem Solving)</option>
+                  </select>
+                </div>
+
+                {activeModal === 'EXAM' ? (
+                  <div className="form-group">
+                    <label className="form-label">Exam Level / Type</label>
+                    <select
+                      className="form-input"
+                      value={formData.examLevel}
+                      onChange={e => setFormData({...formData, examLevel: e.target.value})}
+                    >
+                      <option value="University / College">University / College</option>
+                      <option value="High School / AP">High School / AP / A-Levels</option>
+                      <option value="Competitive / Entrance">Competitive / Entrance Examination</option>
+                      <option value="Professional / Certification">Professional / Certification</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div className="form-group">
+                    <label className="form-label">Learning Pace</label>
+                    <select
+                      className="form-input"
+                      defaultValue="Balanced"
+                    >
+                      <option value="Comprehensive">Comprehensive Mastery</option>
+                      <option value="Balanced">Balanced Progression</option>
+                      <option value="Accelerated">Accelerated Track</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
               <div className="form-group">
-                <label className="form-label">Syllabus / Specific Topics (Optional)</label>
-                <textarea 
-                  className="form-input form-textarea" 
-                  placeholder="Paste your syllabus, topic list, or bullet points here to guide the milestone structure..." 
-                  value={formData.syllabus} 
-                  onChange={e => setFormData({...formData, syllabus: e.target.value})} 
+                <label className="form-label">Syllabus / Focus Units / Chapters (Optional)</label>
+                <textarea
+                  className="form-input form-textarea"
+                  placeholder="Paste your specific syllabus units, chapters, or textbook outline here to ground every milestone in your exact material..."
+                  value={formData.syllabus}
+                  onChange={e => setFormData({...formData, syllabus: e.target.value})}
                 />
               </div>
 

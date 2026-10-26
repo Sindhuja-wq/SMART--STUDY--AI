@@ -4,7 +4,7 @@
  * 1. Groq Cloud (Free tier running high-speed open-source Llama models)
  * 2. Google Gemini API (Free tier via Google AI Studio)
  * 3. Ollama (Local development or remote hosted endpoint)
- * 4. Graceful multi-provider cascade failover
+ * 4. Graceful multi-provider cascade failover with rate-limit and transient retry logic
  */
 
 export interface AIGenerationOptions {
@@ -16,17 +16,29 @@ export interface AIGenerationOptions {
   timeoutMs?: number;
 }
 
+export interface DetailedGenerationResult {
+  content: string | null;
+  provider?: "groq" | "gemini" | "ollama";
+  error?: string;
+}
+
 interface ProviderAttempt {
   name: "groq" | "gemini" | "ollama";
   execute: () => Promise<string | null>;
 }
 
 export async function generateAIContent(options: AIGenerationOptions): Promise<string | null> {
+  const result = await generateAIContentDetailed(options);
+  return result.content;
+}
+
+export async function generateAIContentDetailed(options: AIGenerationOptions): Promise<DetailedGenerationResult> {
   const providerConfig = (process.env.AI_PROVIDER || "auto").toLowerCase().trim();
   const groqKey = process.env.GROQ_API_KEY?.trim();
   const geminiKey = process.env.GEMINI_API_KEY?.trim();
   const ollamaUrl = process.env.OLLAMA_URL?.trim() || "http://localhost:11434";
   const isVercel = process.env.VERCEL === "1";
+  const isProduction = process.env.NODE_ENV === "production";
 
   // Build ordered list of providers to attempt
   const attempts: ProviderAttempt[] = [];
@@ -35,7 +47,7 @@ export async function generateAIContent(options: AIGenerationOptions): Promise<s
     if (groqKey) {
       attempts.push({
         name: "groq",
-        execute: () => callGroqAPI(options, groqKey),
+        execute: () => callGroqWithRetry(options, groqKey),
       });
     }
   };
@@ -44,15 +56,17 @@ export async function generateAIContent(options: AIGenerationOptions): Promise<s
     if (geminiKey) {
       attempts.push({
         name: "gemini",
-        execute: () => callGeminiAPI(options, geminiKey),
+        execute: () => callGeminiWithRetry(options, geminiKey),
       });
     }
   };
 
   const addOllama = () => {
-    // In Vercel serverless environment, localhost Ollama does not exist; only attempt if remote URL
-    const isLocalhost = ollamaUrl.includes("localhost") || ollamaUrl.includes("127.0.0.1");
-    if (!isVercel || !isLocalhost) {
+    // In serverless or production cloud environments (e.g. Vercel), localhost Ollama does not exist.
+    // Only attempt Ollama if it is a remote endpoint or we are in local development.
+    const isLocalhost =
+      ollamaUrl.includes("localhost") || ollamaUrl.includes("127.0.0.1") || ollamaUrl.includes("0.0.0.0");
+    if (!isVercel && (!isProduction || !isLocalhost)) {
       attempts.push({
         name: "ollama",
         execute: () => callOllamaAPI(options, ollamaUrl),
@@ -73,30 +87,74 @@ export async function generateAIContent(options: AIGenerationOptions): Promise<s
     addGroq();
     addGemini();
   } else {
-    // Default "auto": Prioritize cloud free tiers (Groq, then Gemini), then Ollama
+    // Default "auto": Prioritize configured cloud free tiers (Groq, then Gemini), then local Ollama
     addGroq();
     addGemini();
     addOllama();
   }
 
   if (attempts.length === 0) {
-    console.warn("[AI Provider] No active AI provider credentials available in environment.");
-    return null;
+    const errorMsg = "No active AI provider credentials configured (GROQ_API_KEY or GEMINI_API_KEY).";
+    console.warn(`[AI Provider] ${errorMsg}`);
+    return { content: null, error: errorMsg };
   }
+
+  const errors: string[] = [];
 
   for (const attempt of attempts) {
     try {
       const result = await attempt.execute();
       if (result && result.trim().length > 0) {
-        return result.trim();
+        return {
+          content: result.trim(),
+          provider: attempt.name,
+        };
       }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      console.warn(`[AI Provider: ${attempt.name}] Request failed: ${errMsg}. Trying next provider...`);
+      errors.push(`${attempt.name}: ${errMsg}`);
+      console.warn(`[AI Provider: ${attempt.name}] Call failed: ${errMsg}. Attempting cascade failover...`);
     }
   }
 
-  return null;
+  return {
+    content: null,
+    error: `All configured AI providers failed: ${errors.join(" | ")}`,
+  };
+}
+
+/**
+ * Calls Groq Cloud with bounded retry for transient errors (e.g. rate limit 429)
+ */
+async function callGroqWithRetry(options: AIGenerationOptions, apiKey: string): Promise<string | null> {
+  try {
+    return await callGroqAPI(options, apiKey);
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg.includes("429") || errMsg.includes("rate limit") || errMsg.includes("503")) {
+      console.warn("[AI Provider: Groq] Transient rate limit or server error encountered. Retrying in 1200ms...");
+      await new Promise((res) => setTimeout(res, 1200));
+      return await callGroqAPI(options, apiKey);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Calls Google Gemini with bounded retry for transient errors
+ */
+async function callGeminiWithRetry(options: AIGenerationOptions, apiKey: string): Promise<string | null> {
+  try {
+    return await callGeminiAPI(options, apiKey);
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg.includes("429") || errMsg.includes("rate limit") || errMsg.includes("503")) {
+      console.warn("[AI Provider: Gemini] Transient rate limit or server error encountered. Retrying in 1200ms...");
+      await new Promise((res) => setTimeout(res, 1200));
+      return await callGeminiAPI(options, apiKey);
+    }
+    throw err;
+  }
 }
 
 /**
@@ -147,8 +205,11 @@ async function callOllamaAPI(options: AIGenerationOptions, baseUrl: string): Pro
 
     const data = (await response.json()) as { response?: string };
     return data.response ? data.response.trim() : null;
-  } catch (err) {
+  } catch (err: unknown) {
     clearTimeout(timeout);
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`Ollama request timed out after ${timeoutMs}ms`);
+    }
     throw err;
   }
 }
@@ -179,7 +240,7 @@ async function callGroqAPI(options: AIGenerationOptions, apiKey: string): Promis
       model,
       messages,
       temperature: options.temperature ?? 0.3,
-      max_tokens: options.maxTokens ?? 2000,
+      max_tokens: options.maxTokens ?? 2200,
     };
 
     if (options.formatJson) {
@@ -200,15 +261,18 @@ async function callGroqAPI(options: AIGenerationOptions, apiKey: string): Promis
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`Groq returned ${response.status}: ${errText}`);
+      throw new Error(`Groq returned ${response.status}: ${errText.substring(0, 200)}`);
     }
 
     const data = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
     return data.choices?.[0]?.message?.content?.trim() || null;
-  } catch (err) {
+  } catch (err: unknown) {
     clearTimeout(timeout);
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`Groq request timed out after ${timeoutMs}ms`);
+    }
     throw err;
   }
 }
@@ -242,7 +306,7 @@ async function callGeminiAPI(options: AIGenerationOptions, apiKey: string): Prom
       ],
       generationConfig: {
         temperature: options.temperature ?? 0.3,
-        maxOutputTokens: options.maxTokens ?? 2000,
+        maxOutputTokens: options.maxTokens ?? 2500,
       },
     };
 
@@ -262,7 +326,7 @@ async function callGeminiAPI(options: AIGenerationOptions, apiKey: string): Prom
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`Gemini returned ${response.status}: ${errText}`);
+      throw new Error(`Gemini returned ${response.status}: ${errText.substring(0, 200)}`);
     }
 
     const data = (await response.json()) as {
@@ -270,8 +334,11 @@ async function callGeminiAPI(options: AIGenerationOptions, apiKey: string): Prom
     };
     const candidateText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     return candidateText ? candidateText.trim() : null;
-  } catch (err) {
+  } catch (err: unknown) {
     clearTimeout(timeout);
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`Gemini request timed out after ${timeoutMs}ms`);
+    }
     throw err;
   }
 }

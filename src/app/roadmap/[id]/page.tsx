@@ -23,8 +23,6 @@ import {
   ExternalLink,
   Sparkles,
   Award,
-  Layers,
-  GraduationCap,
   RefreshCw
 } from "lucide-react";
 
@@ -76,6 +74,31 @@ function RoadmapView() {
   const [activeTab, setActiveTab] = useState<"NOTES" | "VIDEO" | "PRACTICE">("NOTES");
   const [notesGenerating, setNotesGenerating] = useState(false);
   const [topicNotes, setTopicNotes] = useState<Record<string, string>>({});
+  const generatingNotesRef = useRef<Set<string>>(new Set());
+
+  const loadNotes = async (topicId: string, force = false) => {
+    if (!force && topicNotes[topicId]) return;
+    if (generatingNotesRef.current.has(topicId)) return;
+
+    generatingNotesRef.current.add(topicId);
+    setNotesGenerating(true);
+    try {
+      const res = await fetch("/api/notes/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topicId, forceRegenerate: force })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTopicNotes(prev => ({ ...prev, [topicId]: data.notes }));
+      }
+    } catch (err) {
+      console.error("Failed to load notes:", err);
+    } finally {
+      generatingNotesRef.current.delete(topicId);
+      setNotesGenerating(false);
+    }
+  };
 
   const fetchRoadmap = async () => {
     try {
@@ -120,32 +143,6 @@ function RoadmapView() {
       ignore = true;
     };
   }, [status, router, params.id]);
-
-  const generatingNotesRef = useRef<Set<string>>(new Set());
-
-  const loadNotes = async (topicId: string, force = false) => {
-    if (!force && topicNotes[topicId]) return;
-    if (generatingNotesRef.current.has(topicId)) return;
-    
-    generatingNotesRef.current.add(topicId);
-    setNotesGenerating(true);
-    try {
-      const res = await fetch("/api/notes/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topicId, forceRegenerate: force })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setTopicNotes(prev => ({ ...prev, [topicId]: data.notes }));
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      generatingNotesRef.current.delete(topicId);
-      setNotesGenerating(false);
-    }
-  };
 
   if (loading || status === "loading") {
     return (

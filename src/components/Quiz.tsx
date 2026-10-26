@@ -105,7 +105,7 @@ export function Quiz({ topicId, onComplete }: { topicId: string; onComplete: () 
         const data = await res.json().catch(() => ({}));
         setErrorMessage(data.error || "Failed to generate assessment.");
       }
-    } catch (_err: unknown) {
+    } catch {
       clearInterval(stepInterval);
       setErrorMessage("Network error while generating quiz.");
     } finally {
@@ -134,7 +134,7 @@ export function Quiz({ topicId, onComplete }: { topicId: string; onComplete: () 
         const errData = (await res.json().catch(() => ({}))) as { error?: string };
         setErrorMessage(errData.error || "Failed to submit assessment.");
       }
-    } catch (_err: unknown) {
+    } catch {
       setErrorMessage("Network error while submitting quiz.");
     } finally {
       setLoading(false);

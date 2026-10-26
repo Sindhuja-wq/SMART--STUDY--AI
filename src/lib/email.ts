@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import dns from "dns";
+import { validateRegistrationEmail } from "./emailValidator";
 
 // Ensure Node prioritizes IPv4 over IPv6 to prevent ETIMEDOUT issues on networks with incomplete IPv6 routing
 try {
@@ -9,6 +10,17 @@ try {
 }
 
 export async function sendOtpEmail(to: string, otp: string) {
+  const emailValidation = validateRegistrationEmail(to);
+  if (!emailValidation.valid || !emailValidation.sanitizedEmail) {
+    throw new Error(`Invalid recipient email address: ${emailValidation.error || "Malformed address"}`);
+  }
+
+  const cleanRecipient = emailValidation.sanitizedEmail;
+
+  if (!/^\d{6}$/.test(otp)) {
+    throw new Error("Invalid OTP format. Expected 6-digit numeric code.");
+  }
+
   if (!process.env.SMTP_HOST && !process.env.SMTP_SERVICE && !process.env.SMTP_USER) {
     console.warn("Email provider is not fully configured in environment variables.");
     throw new Error("Email provider configuration is missing (SMTP_HOST, SMTP_USER, SMTP_PASS).");
@@ -42,7 +54,7 @@ export async function sendOtpEmail(to: string, otp: string) {
 
   const mailOptions = {
     from: fromAddress,
-    to,
+    to: cleanRecipient,
     subject: "Your Verification Code - Smart Study AI",
     text: `Your one-time verification code is: ${otp}. It will expire in 5 minutes.`,
     html: `

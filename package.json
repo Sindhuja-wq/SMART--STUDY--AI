@@ -7,6 +7,7 @@
     "build": "prisma generate --schema=prisma/schema.postgresql.prisma && next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "node scripts/test_quality_audit.mjs",
     "postinstall": "prisma generate --schema=prisma/schema.postgresql.prisma && (prisma skills sync || exit 0)"
   },
   "dependencies": {
@@ -14,10 +15,10 @@
     "@types/bcryptjs": "^2.4.6",
     "bcryptjs": "^3.0.3",
     "lucide-react": "^1.53.0",
-    "next": "16.4.0",
+    "next": "^16.4.3",
     "next-auth": "^4.24.15",
     "next-themes": "^0.4.6",
-    "nodemailer": "^7.0.13",
+    "nodemailer": "^10.2.1",
     "prisma": "^5.22.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -30,7 +31,12 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.4.0",
+    "eslint-config-next": "^16.4.3",
     "typescript": "^5"
+  },
+  "overrides": {
+    "next-auth": {
+      "nodemailer": "$nodemailer"
+    }
   }
 }
