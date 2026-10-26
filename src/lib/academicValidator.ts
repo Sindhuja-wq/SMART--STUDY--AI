@@ -237,6 +237,18 @@ export function validateNotesContent(
     if (!hasCodeOrSyntax) {
       issues.push("Computer science notes should contain code examples, syntax breakdown, or algorithmic complexity analysis.");
     }
+    if (subLower.includes("java") || topicLower.includes("java")) {
+      const hasJavaCode = trimmed.includes("```java") || trimmed.includes("class ") || trimmed.includes("system.out.println");
+      if (!hasJavaCode) {
+        issues.push("Java notes must include valid, formatted Java code examples.");
+      }
+      if (topicLower.includes("class") || topicLower.includes("object")) {
+        const hasCoreOop = lowerNotes.includes("class") && (lowerNotes.includes("object") || lowerNotes.includes("instance"));
+        if (!hasCoreOop) {
+          issues.push("Java Classes and Objects notes must explain classes and object instantiation.");
+        }
+      }
+    }
   }
 
   // 7. Syllabus Scope Representation

@@ -247,10 +247,10 @@ export function Quiz({ topicId, onComplete }: { topicId: string; onComplete: () 
                 key={q.id} 
                 style={{ 
                   marginBottom: "1.25rem", 
-                  padding: "1.25rem", 
-                  background: "rgba(11, 16, 32, 0.8)", 
-                  borderRadius: "var(--radius-md)", 
-                  border: isCorrect ? "1px solid rgba(52, 211, 153, 0.25)" : "1px solid rgba(248, 113, 113, 0.25)"
+                  padding: "1.25rem",
+                  background: "var(--bg-secondary)",
+                  borderRadius: "var(--radius-md)",
+                  border: isCorrect ? "1px solid rgba(52, 211, 153, 0.35)" : "1px solid rgba(248, 113, 113, 0.35)"
                 }}
               >
                 <div className="flex-between mb-2">

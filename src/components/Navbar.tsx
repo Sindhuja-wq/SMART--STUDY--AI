@@ -51,7 +51,7 @@ export function Navbar() {
                 display: "flex", 
                 alignItems: "center", 
                 gap: "0.6rem", 
-                background: "rgba(17, 23, 43, 0.7)", 
+                background: "var(--bg-glass-active)",
                 padding: "0.4rem 0.85rem", 
                 borderRadius: "var(--radius-full)",
                 border: "1px solid var(--border-subtle)" 

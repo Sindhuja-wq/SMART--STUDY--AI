@@ -14,7 +14,7 @@ export function AuthVisualSide() {
         justifyContent: "space-between",
         padding: "3rem",
         borderRadius: "var(--radius-xl)",
-        background: "linear-gradient(145deg, rgba(17, 23, 43, 0.9) 0%, rgba(8, 11, 24, 0.95) 100%)",
+        background: "var(--card-gradient)",
         border: "1px solid var(--border-medium)",
         boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 30px rgba(96, 165, 250, 0.15)",
         position: "relative",

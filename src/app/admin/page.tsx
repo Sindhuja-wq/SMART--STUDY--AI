@@ -99,7 +99,7 @@ export default function AdminDashboard() {
           className="glass-card mb-8" 
           style={{ 
             padding: "2.5rem",
-            background: "linear-gradient(135deg, rgba(23, 32, 56, 0.85) 0%, rgba(17, 23, 43, 0.95) 100%)",
+            background: "var(--card-gradient)",
             borderLeft: "4px solid var(--accent-emerald)"
           }}
         >

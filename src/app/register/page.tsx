@@ -94,7 +94,7 @@ export default function Register() {
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ email: email.trim(), resendOnly: true }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -318,8 +318,29 @@ export default function Register() {
                     textAlign: "center" 
                   }}
                 >
+                  <p className="text-muted text-sm" style={{ marginBottom: "0.5rem" }}>
+                    Already have a pending verification code?{" "}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError("");
+                        setMessage("");
+                        setStep(2);
+                      }}
+                      className="btn btn-ghost"
+                      style={{
+                        color: "var(--accent-primary)",
+                        fontWeight: 600,
+                        padding: "0.1rem 0.35rem",
+                        display: "inline",
+                        fontSize: "0.875rem"
+                      }}
+                    >
+                      Enter OTP Code →
+                    </button>
+                  </p>
                   <p className="text-muted text-sm">
-                    Already registered?{" "}
+                    Already registered and verified?{" "}
                     <Link 
                       href="/login" 
                       style={{ 

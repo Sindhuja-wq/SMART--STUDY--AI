@@ -248,7 +248,7 @@ export default function Dashboard() {
           className="glass-card mb-8" 
           style={{ 
             padding: "2.25rem 2.5rem", 
-            background: "linear-gradient(135deg, rgba(23, 32, 56, 0.8) 0%, rgba(17, 23, 43, 0.9) 100%)",
+            background: "var(--card-gradient)",
             position: "relative",
             overflow: "hidden"
           }}
@@ -405,7 +405,7 @@ export default function Dashboard() {
             style={{ 
               padding: "2rem 2.5rem", 
               borderLeft: "4px solid var(--accent-primary)",
-              background: "linear-gradient(90deg, rgba(23, 32, 56, 0.9) 0%, rgba(17, 23, 43, 0.8) 100%)"
+              background: "var(--card-gradient)"
             }}
           >
             <div className="flex-between" style={{ flexWrap: "wrap", gap: "1.5rem" }}>
@@ -789,7 +789,7 @@ export default function Dashboard() {
                         style={{ 
                           cursor: "pointer", 
                           background: formData.dailyStudyTime === m ? "var(--accent-primary)" : undefined,
-                          color: formData.dailyStudyTime === m ? "#080B18" : undefined
+                          color: formData.dailyStudyTime === m ? "#FFFFFF" : undefined
                         }}
                       >
                         {m}m

@@ -445,30 +445,44 @@ export function getDomainProfile(domain: SubjectDomain, subject: string): Domain
         domain,
         displayName: "Computer Science & Software Systems",
         pedagogicalFocus:
-          "Syntactically valid, runnable code in the exact language appropriate for the subject, theoretical mechanisms, computational complexity, memory management, edge cases, and debugging.",
+          "Syntactically valid, runnable code in the exact language appropriate for the subject (e.g. Java for Java), beginner-friendly conceptual definitions, keyword explanation, line-by-line breakdown, console output, practical real-world scenario, error debugging with fixes, and 5 practice questions with answers.",
         requiredElements: [
-          "Conceptual definition and architectural role",
-          "Syntactically valid, complete code examples in the topic language",
-          "Line-by-line explanation of code mechanics and console output",
-          "Time and space algorithmic complexity analysis where relevant",
-          "Edge case handling (null states, boundaries, resource lifecycle)",
-          "Common coding bugs, misconceptions, and exam traps",
+          "Topic title and learning objectives",
+          "Prerequisites and background context",
+          "Clear definition and explanation in beginner-friendly English",
+          "Why the concept is useful and where it is used in production systems",
+          "Syntax and explanation of important keywords",
+          "Correct, complete, runnable code example with main entry point",
+          "Line-by-line code explanation detailing constructs",
+          "Expected console output for the code example",
+          "Practical real-world industry example",
+          "Common mistakes and how to fix them with code before/after snippets",
+          "Comparative analysis tables contrasting related concepts",
+          "Important exam and interview points with memory architecture insights",
+          "Short recap of key takeaways",
+          "Exactly 5 practice questions with complete answers and explanations in a separate section",
         ],
         forbiddenElements: [
-          "Generic dummy placeholder functions like executePattern()",
+          "Generic dummy placeholder functions like executePattern() or dummyFunction()",
           "Non-functional pseudocode masquerading as complete runnable syntax",
+          "Unclosed or truncated code blocks",
         ],
         systemRole: "distinguished computer science professor and principal software systems architect",
         notesStructure: [
-          "1. Topic Title & Learning Objectives",
-          "2. Prerequisites & Architectural Context",
-          "3. Core Concept Overview & Memory/Execution Mechanics",
-          "4. Syntactically Valid, Runnable Code Implementation",
-          "5. Algorithmic Complexity & Edge Case Analysis",
-          "6. Comparative Analysis Table",
-          "7. Common Coding Traps, Misconceptions & Exam Pitfalls",
-          "8. Practice Exercises & Solutions",
-          "9. High-Yield Revision Summary",
+          "### 1. Topic Title & Learning Objectives",
+          "### 2. Prerequisites & Background Context",
+          "### 3. Clear Definition & Explanation (in beginner-friendly English)",
+          "### 4. Why This Concept Is Useful & Where It Is Used",
+          "### 5. Syntax & Important Keywords Explanation",
+          "### 6. Correct, Complete, Runnable Code Example",
+          "### 7. Line-by-Line Code Explanation",
+          "### 8. Expected Console Output",
+          "### 9. Practical Real-World Example",
+          "### 10. Common Mistakes & How to Fix Them",
+          "### 11. Comparative Analysis Table",
+          "### 12. Important Exam & Interview Points",
+          "### 13. Short Recap",
+          "### 14. Practice Questions & Detailed Explanations (Exactly 5 comprehensive questions with complete answers in a separate section)",
         ],
       };
 
@@ -1585,7 +1599,7 @@ In environmental science, **${topic}** represents an interconnected systemic pro
 `;
 }
 
-function buildComputerScienceNotes(
+function buildJavaNotes(
   subject: string,
   topic: string,
   theory: string,
@@ -1593,126 +1607,719 @@ function buildComputerScienceNotes(
   syllabusNote: string,
   _isExamMode: boolean
 ): string {
-  const isJava = /java/i.test(subject) || /java/i.test(topic);
-  const isPython = /python/i.test(subject) || /python/i.test(topic);
-  const isDbms = /dbms|sql|database/i.test(subject) || /dbms|sql|database|acid/i.test(topic);
-  const isOs = /os|operating system/i.test(subject) || /scheduling|round robin|deadlock/i.test(topic);
-  const titleLower = topic.toLowerCase();
+  const _isClassesObjects = /class|object|oop|constructor/i.test(topic) || !/inheritance|polymorphism|interface|exception|thread|collection/i.test(topic);
 
-  let lang = "java";
-  let code = `// Demonstration of ${topic}
-public class Demonstration {
-    public static void main(String[] args) {
-        System.out.println("Executing core logic for ${topic}");
-    }
-}`;
+  return `# ${topic} (Java Programming)
 
-  let specializedBreakdown = `* **System Architecture**: Deconstructs foundational interfaces, execution pipelines, and data representations.
-* **State & Lifecycle**: Clean state transitions and memory management ensure high availability and predictable operations.`;
+${badge}
+${syllabusNote}
+---
 
-  if (isJava && (titleLower.includes("class") || titleLower.includes("object") || titleLower.includes("oop"))) {
-    lang = "java";
-    specializedBreakdown = `* **Class as Blueprint**: A class defines state (fields) and behavior (methods) loaded once into JVM Metaspace.
-* **Object as Heap Instance**: An object is an instantiated concrete realization created dynamically via \`new\` and allocated on the Garbage-Collected JVM Heap.
-* **Encapsulation**: Internal object state is protected by declaring fields \`private\` and providing controlled public accessors (getters) and mutators (setters).
-* **Constructor Initialization**: Constructors initialize newly instantiated heap objects to a consistent, valid state before exposure to caller threads.
-* **Stack vs Heap Separation**: Object references reside on the thread call stack; actual object payload data resides on the JVM heap.`;
+### 1. Topic Title & Learning Objectives
+By completing this module on **${topic}**, you will master:
+* **The Blueprint vs. Instance Paradigm**: Understand how a Java \`class\` defines data fields and methods, while an \`object\` represents a concrete runtime instance allocated on the JVM Heap.
+* **State & Behavior Modeling**: Design encapsulated classes where internal state is protected via \`private\` modifiers and exposed safely through accessor methods.
+* **Instantiation Mechanics**: Understand the exact execution flow of the \`new\` operator, constructor initialization, and reference assignment.
+* **Memory Architecture**: Distinguish between reference variables on the thread call stack and object payloads residing on the JVM Heap.
+* **Production Debugging**: Identify and resolve frequent beginner pitfalls including \`NullPointerException\`, identity comparison (\`==\`) vs value equality (\`.equals()\`), and field shadowing.
 
-    code = `// Production Java: Classes, Objects, and Encapsulation
-public class Student {
-    // 1. Encapsulated instance fields (State)
-    private final int studentId;
-    private String fullName;
-    private double gradePointAverage;
+*Prerequisites*: Familiarity with basic Java primitives (\`int\`, \`double\`, \`boolean\`), method signatures, and basic console I/O using \`System.out.println\`.
 
-    // 2. Parameterized Constructor ensuring valid initialization
-    public Student(int studentId, String fullName, double gpa) {
-        if (studentId <= 0) throw new IllegalArgumentException("Invalid student ID");
-        this.studentId = studentId;
-        this.fullName = fullName;
-        this.gradePointAverage = Math.max(0.0, Math.min(4.0, gpa));
-    }
+---
 
-    // 3. Encapsulated Public Behavior (Methods)
-    public int getStudentId() { return studentId; }
-    public String getFullName() { return fullName; }
-    public double getGpa() { return gradePointAverage; }
+### 2. Prerequisites & JVM Execution Architecture
+In Java, execution follows a strictly structured compilation and runtime lifecycle:
+1. **Compilation (\`javac\`)**: Your human-readable source code (\`.java\`) is parsed and compiled into platform-neutral bytecode (\`.class\`).
+2. **Classloading**: The JVM ClassLoader loads class definitions and static metadata into the **Metaspace** (formerly PermGen).
+3. **Execution & Memory Layout**:
+   * **Thread Call Stack**: Stores local primitive variables and object memory references.
+   * **Garbage-Collected Heap**: Dynamically stores all instantiated object payloads and array contents.
+   * **Metaspace**: Stores class structural definitions, bytecode, and static fields.
 
-    public void updateGpa(double newGpa) {
-        if (newGpa >= 0.0 && newGpa <= 4.0) {
-            this.gradePointAverage = newGpa;
+---
+
+### 3. Clear Definition & Conceptual Explanation (Beginner-Friendly)
+In Java, Object-Oriented Programming models real-world entities through two foundational abstractions:
+
+#### 1. What is a Class?
+A **Class** is an architectural blueprint, template, or prototype from which individual objects are created. A class itself does not occupy heap memory for individual data records; it specifies:
+* **Fields (State/Attributes)**: What data the entity holds (e.g., \`studentId\`, \`name\`, \`gradePointAverage\`).
+* **Methods (Behavior/Functions)**: What operations the entity can perform (e.g., \`calculateFinalGrade()\`, \`updateEmail()\`).
+* **Constructors**: Special initialization blocks executed whenever an object is instantiated.
+
+> **Intuitive Analogy**: A class is like the architectural blueprint of a house. The blueprint defines rooms, dimensions, and wiring diagrams, but nobody can sleep inside a blueprint.
+
+#### 2. What is an Object?
+An **Object** is a concrete, self-contained runtime instance created from the class blueprint. Each object maintains its own private copy of instance fields in memory.
+
+> **Intuitive Analogy**: If the class is the house blueprint, an object is an actual, physical brick-and-mortar house constructed on a plot of land (the JVM Heap). You can build 50 different houses from a single blueprint.
+
+#### 3. The Role of the \`new\` Keyword
+The \`new\` keyword performs three critical actions in atomic sequence:
+1. Calculates the required memory size for all instance fields in the class.
+2. Dynamically allocates that memory chunk on the JVM Garbage-Collected Heap.
+3. Invokes the matching constructor to initialize the newly created object's state and returns the heap memory address to the reference variable on the stack.
+
+---
+
+### 4. Why This Concept Is Useful & Where It Is Used
+Object-oriented modeling in Java is the foundation of modern enterprise software:
+* **Enterprise Web APIs (Spring Boot)**: Database entities, services, and DTOs (Data Transfer Objects) are modeled as Java classes mapped to relational tables.
+* **Android Development**: User interface elements (\`Button\`, \`TextView\`) and business domain models are classes instantiated during activity lifecycles.
+* **Large-Scale Team Development**: Encapsulation ensures that internal implementation details can change without breaking other developers' code that relies on public interfaces.
+
+---
+
+### 5. Syntax & Important Keywords Explanation
+* **\`class\`**: Declares a new user-defined composite data type.
+* **\`public\`**: An access modifier allowing access from any package or class.
+* **\`private\`**: An access modifier restricting direct field or method visibility strictly to within the enclosing class (the cornerstone of **Encapsulation**).
+* **\`new\`**: Allocates heap memory for a new object and invokes its constructor.
+* **\`this\`**: An explicit reference to the current object instance, commonly used to distinguish instance fields from parameter names in constructors.
+* **\`static\`**: Designates members belonging to the class itself rather than individual object instances (e.g., \`public static void main\`).
+* **\`void\`**: Specifies that a method returns no value to the caller upon completion.
+* **\`return\`**: Terminates method execution and passes the computed value back to the caller.
+
+---
+
+### 6. Correct, Complete, Runnable Java Code Example
+The following complete Java program demonstrates classes, objects, encapsulation, constructors, getters, setters, and method invocation. You can save this file as \`StudentManagementSystem.java\`, compile it with \`javac StudentManagementSystem.java\`, and run it with \`java StudentManagementSystem\`.
+
+\`\`\`java
+// File: StudentManagementSystem.java
+// A complete, runnable Java application demonstrating Classes and Objects
+
+public class StudentManagementSystem {
+
+    // Definition of the Student class (The Blueprint)
+    static class Student {
+        // 1. Private instance fields (Encapsulated State)
+        private final int studentId;
+        private String fullName;
+        private double gradePointAverage;
+        private boolean isEnrolled;
+
+        // 2. Default Constructor (No-arg constructor)
+        public Student() {
+            this.studentId = 0;
+            this.fullName = "Unassigned";
+            this.gradePointAverage = 0.0;
+            this.isEnrolled = false;
+        }
+
+        // 3. Parameterized Constructor ensuring valid initialization
+        public Student(int studentId, String fullName, double gpa) {
+            if (studentId <= 0) {
+                throw new IllegalArgumentException("Student ID must be a positive integer.");
+            }
+            this.studentId = studentId;
+            this.fullName = fullName != null ? fullName.trim() : "Unknown";
+            this.setGpa(gpa); // Reusing validation logic
+            this.isEnrolled = true;
+        }
+
+        // 4. Getter methods (Accessors)
+        public int getStudentId() {
+            return this.studentId;
+        }
+
+        public String getFullName() {
+            return this.fullName;
+        }
+
+        public double getGpa() {
+            return this.gradePointAverage;
+        }
+
+        public boolean isEnrolled() {
+            return this.isEnrolled;
+        }
+
+        // 5. Setter methods with defensive validation (Mutators)
+        public void setFullName(String fullName) {
+            if (fullName != null && !fullName.trim().isEmpty()) {
+                this.fullName = fullName.trim();
+            }
+        }
+
+        public void setGpa(double gpa) {
+            if (gpa >= 0.0 && gpa <= 4.0) {
+                this.gradePointAverage = gpa;
+            } else {
+                System.out.println("Warning: Invalid GPA " + gpa + ". Must be between 0.0 and 4.0.");
+            }
+        }
+
+        // 6. Instance Business Method (Behavior)
+        public boolean isHonorRollEligible() {
+            return this.isEnrolled && this.gradePointAverage >= 3.8;
+        }
+
+        // 7. Textual representation
+        public void printSummary() {
+            System.out.println("ID: " + this.studentId +
+                               " | Name: " + this.fullName +
+                               " | GPA: " + String.format("%.2f", this.gradePointAverage) +
+                               " | Enrolled: " + this.isEnrolled +
+                               " | Honor Roll: " + (isHonorRollEligible() ? "YES" : "NO"));
         }
     }
 
+    // Main method: Execution entry point
     public static void main(String[] args) {
-        // Heap allocation via 'new' keyword
-        Student scholar = new Student(101, "Ada Lovelace", 3.95);
-        System.out.println("Scholar: " + scholar.getFullName() + " | GPA: " + scholar.getGpa());
-    }
-}`;
-  } else if (isDbms && (titleLower.includes("acid") || titleLower.includes("transaction"))) {
-    lang = "sql";
-    specializedBreakdown = `* **Atomicity**: The "All-or-Nothing" transaction guarantee. If any statement fails or the system crashes, the entire transaction is rolled back via undo logs.
-* **Consistency**: The database transitions only between valid states, preserving all schema integrity constraints (Primary Keys, Foreign Keys, Check constraints).
-* **Isolation**: Intermediate uncommitted states of concurrent transactions remain invisible to each other, preventing anomalies according to the configured isolation level.
-* **Durability**: Once a transaction is committed, its modifications survive crashes, power outages, and system restarts through Write-Ahead Logging (WAL) fsync disk flushes.`;
+        System.out.println("==================================================");
+        System.out.println(" SMART STUDY AI - JAVA CLASSES & OBJECTS DEMO");
+        System.out.println("==================================================");
 
-    code = `-- ACID Transaction in Relational DBMS (PostgreSQL / MySQL)
+        // Object 1: Created via 'new' and Parameterized Constructor
+        Student student1 = new Student(101, "Ada Lovelace", 3.95);
+
+        // Object 2: Created via 'new' and Parameterized Constructor
+        Student student2 = new Student(102, "James Gosling", 3.75);
+
+        // Display initial object states
+        System.out.println("\n--- Initial Student Records ---");
+        student1.printSummary();
+        student2.printSummary();
+
+        // Mutating object state safely through setter method
+        System.out.println("\n--- Updating James Gosling's GPA ---");
+        student2.setGpa(3.85); // James is now eligible for honor roll
+        student2.printSummary();
+
+        // Demonstrating object reference independence
+        System.out.println("\n--- Demonstrating Independent Heap Memory ---");
+        System.out.println("student1 name: " + student1.getFullName());
+        System.out.println("student2 name: " + student2.getFullName());
+        System.out.println("student1 Honor Roll: " + student1.isHonorRollEligible());
+        System.out.println("student2 Honor Roll: " + student2.isHonorRollEligible());
+        System.out.println("==================================================");
+    }
+}
+\`\`\`
+
+---
+
+### 7. Line-by-Line Code Explanation
+* **Lines 6–13**: Defines \`private\` fields (\`studentId\`, \`fullName\`, \`gradePointAverage\`, \`isEnrolled\`). Declaring them \`private\` prevents external code from setting nonsensical values like \`gpa = -999.0\`.
+* **Lines 16–22**: The default no-argument constructor provides safe fallback defaults when no parameters are provided.
+* **Lines 25–33**: The parameterized constructor uses \`this.studentId = studentId\` to assign the incoming argument to the instance field. The \`this\` keyword resolves parameter shadowing.
+* **Lines 36–50**: Accessor methods (\`getters\`) grant read-only visibility to private internal fields.
+* **Lines 53–66**: Mutator methods (\`setters\`) enforce validation rules before committing changes to internal state.
+* **Lines 69–71**: \`isHonorRollEligible()\` defines class behavior by computing a dynamic boolean result from internal state.
+* **Lines 87–91**: In \`main()\`, two distinct object instances (\`student1\` and \`student2\`) are allocated on the heap using \`new Student(...)\`.
+* **Lines 98–101**: Modifying \`student2.setGpa(3.85)\` updates only \`student2\`'s heap memory without altering \`student1\`.
+
+---
+
+### 8. Expected Console Output
+When executed, the program produces the following exact console output:
+
+\`\`\`text
+==================================================
+ SMART STUDY AI - JAVA CLASSES & OBJECTS DEMO
+==================================================
+
+--- Initial Student Records ---
+ID: 101 | Name: Ada Lovelace | GPA: 3.95 | Enrolled: true | Honor Roll: YES
+ID: 102 | Name: James Gosling | GPA: 3.75 | Enrolled: true | Honor Roll: NO
+
+--- Updating James Gosling's GPA ---
+ID: 102 | Name: James Gosling | GPA: 3.85 | Enrolled: true | Honor Roll: YES
+
+--- Demonstrating Independent Heap Memory ---
+student1 name: Ada Lovelace
+student2 name: James Gosling
+student1 Honor Roll: true
+student2 Honor Roll: true
+==================================================
+\`\`\`
+
+---
+
+### 9. Practical Real-World Example
+Consider an enterprise banking system. Instead of maintaining loose, disconnected variables like \`accountNumber1\`, \`balance1\`, \`accountNumber2\`, \`balance2\`, banking software models this as a \`BankAccount\` class:
+
+\`\`\`java
+public class BankAccount {
+    private String accountNumber;
+    private double balance;
+
+    public BankAccount(String accountNumber, double initialDeposit) {
+        this.accountNumber = accountNumber;
+        this.balance = Math.max(0.0, initialDeposit);
+    }
+
+    public void deposit(double amount) {
+        if (amount > 0) this.balance += amount;
+    }
+
+    public boolean withdraw(double amount) {
+        if (amount > 0 && this.balance >= amount) {
+            this.balance -= amount;
+            return true;
+        }
+        return false; // Overdraft rejected
+    }
+
+    public double getBalance() { return this.balance; }
+}
+\`\`\`
+Every customer account is simply a separate \`new BankAccount(...)\` object. The bank's business rules (e.g., preventing withdrawals greater than balance) are enforced in one central location.
+
+---
+
+### 10. Common Mistakes & How to Fix Them
+
+#### Mistake 1: \`NullPointerException\` (Uninstantiated Reference)
+\`\`\`java
+// WRONG: Reference variable points to null (no object on heap)
+Student student;
+student.setGpa(3.5); // CRASH: java.lang.NullPointerException
+
+// CORRECT: Allocate memory using 'new' before invoking methods
+Student student = new Student(101, "Alan Turing", 3.5);
+student.setGpa(3.5); // Works properly
+\`\`\`
+
+#### Mistake 2: Reference Equality (\`==\`) vs. Value Equivalence (\`.equals()\`)
+\`\`\`java
+// WRONG: '==' compares heap memory addresses, not string characters
+if (student1.getFullName() == "Ada Lovelace") { ... }
+
+// CORRECT: Use .equals() for content comparison
+if ("Ada Lovelace".equals(student1.getFullName())) { ... }
+\`\`\`
+
+#### Mistake 3: Parameter Shadowing in Constructors Without \`this\`
+\`\`\`java
+// WRONG: Parameter shadows field; field remains uninitialized (0.0)
+public Student(double gpa) {
+    gpa = gpa; // Assigns parameter to itself!
+}
+
+// CORRECT: Use 'this' to target the instance field explicitly
+public Student(double gpa) {
+    this.gpa = gpa;
+}
+\`\`\`
+
+#### Mistake 4: Calling Non-Static Methods from \`static main\`
+\`\`\`java
+// WRONG: Cannot call non-static method from static context without an instance
+public static void main(String[] args) {
+    printSummary(); // COMPILE ERROR
+}
+
+// CORRECT: Create an instance first, then invoke the method
+public static void main(String[] args) {
+    Student s = new Student(1, "Grace Hopper", 4.0);
+    s.printSummary(); // Works properly
+}
+\`\`\`
+
+---
+
+### 11. Comparative Analysis Tables
+
+#### Table 1: Class vs. Object
+| Feature | Class | Object |
+| :--- | :--- | :--- |
+| **Nature** | Architectural blueprint / template | Concrete, instantiated runtime entity |
+| **Creation** | Written once in source code (\`.java\`) | Created dynamically multiple times using \`new\` |
+| **Memory Allocation** | Loaded once into JVM Metaspace | Allocated on the Garbage-Collected JVM Heap |
+| **Existence** | Exists at compile-time and runtime | Exists strictly at runtime during execution |
+
+#### Table 2: Stack Memory vs. Heap Memory
+| Dimension | Stack Memory | Heap Memory |
+| :--- | :--- | :--- |
+| **Storage Target** | Method call frames, primitive values, reference pointers | Actual object instances and array payloads |
+| **Lifecycle** | Automatic allocation and deallocation on method exit | Managed by the JVM Garbage Collector |
+| **Access Speed** | Extremely fast (LIFO execution) | Slightly slower due to dynamic heap addressing |
+| **Scope** | Private to the executing thread | Shared across all threads in the JVM |
+
+---
+
+### 12. Important Exam & Interview Points
+1. **Default Constructor Rule**: If you do not write any constructors, the Java compiler automatically inserts a default no-argument constructor. However, if you write **any** custom constructor (e.g., parameterized), the compiler will **not** generate the default constructor automatically.
+2. **Pass-by-Value in Java**: Java is strictly **pass-by-value**. When passing an object to a method, the **value of the reference address** is copied. Mutating the object's fields inside the method affects the original object, but reassigning the parameter reference does not alter the caller's reference.
+3. **Encapsulation Definition**: Binding data (fields) and code (methods) together while hiding internal implementation details behind private access modifiers.
+4. **Metaspace vs. Heap**: Class definitions, static methods, and bytecode reside in Metaspace; object instances reside on the Heap.
+
+---
+
+### 13. Short High-Yield Recap
+* A **Class** is the blueprint containing fields (state) and methods (behavior).
+* An **Object** is a concrete instance of a class living on the JVM Heap.
+* The **\`new\`** keyword allocates memory on the heap and executes the matching constructor.
+* **Encapsulation** protects object integrity by using \`private\` fields and \`public\` getters/setters.
+* Each object maintains its own independent state in heap memory.
+
+---
+
+### 14. Practice Questions & Detailed Explanations
+
+#### Question 1 (Conceptual)
+**Question**: What is the exact difference between a Class and an Object in Java, and where does each reside in JVM memory?
+* **Answer / Explanation**: A Class is a compile-time blueprint defining the state structure and method behavior of a type; it is loaded into the JVM **Metaspace**. An Object is a runtime instance created dynamically from that blueprint using the \`new\` keyword; all object instance payloads reside on the **Garbage-Collected JVM Heap**.
+
+#### Question 2 (Code Analysis)
+**Question**: What will the following code output when compiled and run?
+\`\`\`java
+Student s1 = new Student(1, "Alex", 3.5);
+Student s2 = s1;
+s2.setGpa(3.9);
+System.out.println(s1.getGpa());
+\`\`\`
+* **Answer / Explanation**: It will print **\`3.9\`**. In Java, assigning \`s2 = s1\` does not clone the object; it simply copies the heap memory reference address. Both \`s1\` and \`s2\` point to the exact same object on the JVM Heap. Modifying state through \`s2\` updates the instance observed by \`s1\`.
+
+#### Question 3 (Constructor Rules)
+**Question**: If a developer creates a class with only \`public Student(int id, String name) { ... }\`, what happens if caller code executes \`Student s = new Student();\`?
+* **Answer / Explanation**: A **compile-time error** occurs (\`constructor Student in class Student cannot be applied to given types; required: int, String; found: no arguments\`). Once a developer defines any custom constructor, the Java compiler suppresses the automatic creation of the default no-argument constructor.
+
+#### Question 4 (Debugging)
+**Question**: Identify the bug in the following constructor and explain how to fix it:
+\`\`\`java
+public class Point {
+    private int x;
+    private int y;
+    public Point(int x, int y) {
+        x = x;
+        y = y;
+    }
+}
+\`\`\`
+* **Answer / Explanation**: **Parameter Shadowing**. The parameter names \`x\` and \`y\` shadow the instance fields \`x\` and \`y\`. The statement \`x = x;\` assigns the local parameter to itself, leaving the instance fields with their default value of \`0\`. The fix is to use the \`this\` keyword:
+\`\`\`java
+public Point(int x, int y) {
+    this.x = x;
+    this.y = y;
+}
+\`\`\`
+
+#### Question 5 (Encapsulation Best Practices)
+**Question**: Why is it considered poor practice to declare instance fields \`public\`, and how does encapsulation prevent system bugs?
+* **Answer / Explanation**: Declaring fields \`public\` permits external code to bypass business rules and set invalid states directly (e.g., \`student.gradePointAverage = -500.0;\`). Encapsulation keeps fields \`private\` and forces modifications through setter methods that validate boundary invariants before persisting state changes, preserving systemic data integrity.
+`;
+}
+
+function buildDbmsNotes(
+  subject: string,
+  topic: string,
+  theory: string,
+  badge: string,
+  syllabusNote: string,
+  _isExamMode: boolean
+): string {
+  return `# ${topic}
+
+${badge}
+${syllabusNote}
+---
+
+### 1. Topic Title & Learning Objectives
+By completing this module on **${topic}**, you will master:
+* The core principles of **ACID Properties** (Atomicity, Consistency, Isolation, and Durability) in relational database transaction management.
+* How to structure deterministic database transactions using \`BEGIN TRANSACTION\`, \`COMMIT\`, and \`ROLLBACK\` semantics.
+* Transaction isolation levels, anomaly prevention (Dirty Reads, Non-Repeatable Reads, Phantom Reads), and concurrency control.
+* Writing production-safe SQL transaction scripts with defensive balance validation and audit logging.
+
+---
+
+### 2. Prerequisites & Background Context
+* Fundamental relational database concepts: tables, rows, primary keys, and foreign keys.
+* Basic SQL DML operations (\`SELECT\`, \`INSERT\`, \`UPDATE\`, \`DELETE\`).
+* Conceptual understanding of concurrent multi-user database access and why uncoordinated concurrent updates risk data corruption.
+
+---
+
+### 3. Clear Definition & Explanation (in beginner-friendly English)
+${theory}
+
+In Database Management Systems (DBMS), a **transaction** is a logical unit of database processing that includes one or more database access operations. To preserve database integrity in the presence of concurrent execution and hardware or network crashes, every enterprise DBMS enforces the **ACID Properties**:
+
+1. **Atomicity (All-or-Nothing Rule)**:
+   * A transaction is treated as an indivisible atomic unit. Either all operations of the transaction complete successfully and their changes are made permanent, or if any operation fails (due to a power outage, network drop, or constraint violation), all previous modifications are completely rolled back to the initial state.
+2. **Consistency (Integrity Invariant Rule)**:
+   * The database must transition from one valid state to another valid state, preserving all integrity constraints (primary keys, foreign keys, \`CHECK\` constraints, and financial balance conservation rules).
+3. **Isolation (Concurrency Shield)**:
+   * Intermediate transaction states are invisible to other concurrently executing transactions. Even when thousands of transactions execute simultaneously, each transaction executes as if it were the sole transaction in the system.
+4. **Durability (Persistence Guarantee)**:
+   * Once a transaction commits via \`COMMIT\`, its modifications survive permanently on non-volatile storage (such as disk or SSD) using Write-Ahead Logging (WAL), even if the server crashes or loses power immediately afterward.
+
+---
+
+### 4. Why This Concept Is Useful & Where It Is Used
+* **Banking & Financial Transfers**: Transferring money between accounts requires debiting account A and crediting account B. Without **Atomicity**, a crash after the debit would cause funds to vanish permanently.
+* **E-Commerce Checkout Systems**: Reserving inventory, deducting payment, and creating an order receipt must occur in an atomic transaction; otherwise, customers could be billed for out-of-stock items.
+* **Flight & Hotel Reservation Engines**: Prevents double-booking seats or hotel rooms when thousands of travelers click "Book Now" simultaneously.
+
+---
+
+### 5. Syntax & Important Keywords Explanation
+* **\`BEGIN TRANSACTION\`** (or \`START TRANSACTION\`): Demarcates the boundary of a new atomic transaction block, turning off implicit autocommit.
+* **\`COMMIT\`**: Permanently writes all operations in the current transaction to disk and releases database row locks.
+* **\`ROLLBACK\`**: Reverts all operations executed since \`BEGIN TRANSACTION\` back to the pre-transaction state, undoing uncommitted changes upon error.
+* **\`SAVEPOINT <name>\`**: Creates a named intermediate checkpoint within a transaction, allowing partial rollback via \`ROLLBACK TO <name>\`.
+* **\`SET TRANSACTION ISOLATION LEVEL\`**: Configures concurrency controls (\`READ UNCOMMITTED\`, \`READ COMMITTED\`, \`REPEATABLE READ\`, or \`SERIALIZABLE\`).
+
+---
+
+### 6. Correct, Complete, Runnable Code Example
+The following production SQL script demonstrates an atomic financial transfer with balance verification and defensive error rollback:
+
+\`\`\`sql
+-- Production ACID Transaction Demonstration for Bank Transfer
+-- Guarantees Atomicity, Consistency, Isolation, and Durability
+
+-- Initialize sample table schema
+CREATE TABLE IF NOT EXISTS bank_accounts (
+    account_id VARCHAR(32) PRIMARY KEY,
+    holder_name VARCHAR(100) NOT NULL,
+    balance DECIMAL(12, 2) NOT NULL CHECK (balance >= 0.00)
+);
+
+CREATE TABLE IF NOT EXISTS transaction_audit_log (
+    log_id INT AUTO_INCREMENT PRIMARY KEY,
+    sender_id VARCHAR(32) NOT NULL,
+    recipient_id VARCHAR(32) NOT NULL,
+    amount DECIMAL(12, 2) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Seed test balances
+INSERT INTO bank_accounts (account_id, holder_name, balance)
+VALUES ('ACC_1001', 'Alice Smith', 1000.00),
+       ('ACC_2002', 'Bob Jones', 500.00)
+ON DUPLICATE KEY UPDATE balance = VALUES(balance);
+
+-- Execute Atomic Transfer Transaction: Transfer $250.00 from Alice to Bob
 BEGIN TRANSACTION;
 
--- Step 1: Deduct $500 from Account 101 (Atomicity & Consistency check)
-UPDATE accounts
-SET balance = balance - 500
-WHERE account_id = 101 AND balance >= 500;
+-- Step 1: Validate sender balance and deduct $250.00
+UPDATE bank_accounts
+SET balance = balance - 250.00
+WHERE account_id = 'ACC_1001' AND balance >= 250.00;
 
--- Step 2: Credit $500 to Account 202
-UPDATE accounts
-SET balance = balance + 500
-WHERE account_id = 202;
+-- Step 2: Credit recipient account with $250.00
+UPDATE bank_accounts
+SET balance = balance + 250.00
+WHERE account_id = 'ACC_2002';
 
--- If constraints are satisfied, commit atomically and persist to WAL:
-COMMIT;`;
-  } else if (isOs && (titleLower.includes("round robin") || titleLower.includes("scheduling"))) {
+-- Step 3: Record audit entry in ledger
+INSERT INTO transaction_audit_log (sender_id, recipient_id, amount, status)
+VALUES ('ACC_1001', 'ACC_2002', 250.00, 'COMPLETED');
+
+-- Step 4: Commit atomically — writes changes to Write-Ahead Log (WAL)
+COMMIT;
+\`\`\`
+
+---
+
+### 7. Line-by-Line Code Explanation
+* **Lines 5–17**: Creates \`bank_accounts\` with a defensive \`CHECK (balance >= 0.00)\` constraint, enforcing the **Consistency** property at the schema level.
+* **Line 26**: \`BEGIN TRANSACTION\` opens an isolated transaction context and suspends autocommit.
+* **Lines 29–31**: Debits $250 from Alice's account with the condition \`balance >= 250.00\`. If balance is insufficient, zero rows are affected.
+* **Lines 34–36**: Credits $250 to Bob's account. Because this is within the transaction, external sessions cannot observe the partial credit until commit.
+* **Lines 39–40**: Inserts an immutable audit ledger entry for regulatory traceability.
+* **Line 43**: \`COMMIT\` atomically writes all three operations into the Write-Ahead Log (WAL) on disk, fulfilling the **Durability** and **Atomicity** guarantees. If any failure had occurred before Line 43, a \`ROLLBACK\` would restore Alice's balance untouched.
+
+---
+
+### 8. Expected Console Output
+\`\`\`text
+Query OK, 2 rows affected (0.01 sec)
+Query OK, 0 rows affected (0.00 sec)
+Query OK, 2 rows affected (0.01 sec)
+Query OK, 0 rows affected (0.00 sec) -- BEGIN TRANSACTION
+Query OK, 1 row affected (0.01 sec)  -- Debit Alice: New Balance = $750.00
+Query OK, 1 row affected (0.01 sec)  -- Credit Bob: New Balance = $750.00
+Query OK, 1 row affected (0.01 sec)  -- Audit Log Recorded
+Query OK, 0 rows affected (0.01 sec) -- COMMIT: Changes Permanently Persisted
+Transaction committed successfully. Total system funds conserved: $1,500.00.
+\`\`\`
+
+---
+
+### 9. Practical Real-World Example
+Consider an ATM cash withdrawal of $100:
+1. The ATM communicates with the core banking database.
+2. The database starts an atomic transaction: it checks the balance and records a debit of $100.
+3. Suddenly, before cash is dispensed from the mechanical tray, the physical ATM experiences a localized power cut.
+4. Because the transaction was never confirmed with \`COMMIT\`, the database recovery manager issues an automatic \`ROLLBACK\`.
+5. When power returns, the customer's account balance is completely restored. Money is never deducted without the transaction reaching full completion.
+
+---
+
+### 10. Common Mistakes & How to Fix Them
+1. **Relying on Default Autocommit**:
+   * *Mistake*: Running multiple dependent \`UPDATE\` queries without \`BEGIN TRANSACTION\`. If statement 2 fails, statement 1 remains committed, corrupting data.
+   * *Fix*: Always wrap multi-step state transitions inside \`BEGIN TRANSACTION\` and explicitly terminate with \`COMMIT\` or \`ROLLBACK\`.
+2. **Missing Rollback in Exception Handlers**:
+   * *Mistake*: Catching an SQL error in backend application code but failing to execute \`ROLLBACK;\`. The database connection pool leaves active row locks, freezing subsequent queries.
+   * *Fix*: Always issue \`ROLLBACK\` in application catch/except blocks or utilize database connection managers that rollback uncommitted transactions on pool return.
+3. **Choosing the Wrong Isolation Level**:
+   * *Mistake*: Using \`READ UNCOMMITTED\` in financial reporting, causing dirty reads of transactions that are subsequently aborted.
+   * *Fix*: Use \`READ COMMITTED\` or \`REPEATABLE READ\` as baseline production isolation levels, and \`SERIALIZABLE\` for strict ledger accounting.
+
+---
+
+### 11. Comparative Analysis Table
+| Dimension | Autocommit Mode (No Transaction) | ACID Explicit Transaction |
+| :--- | :--- | :--- |
+| **Atomicity** | None — each statement commits independently | Guaranteed — all statements commit or none do |
+| **Crash Recovery** | Partial, inconsistent data states survive crash | Clean recovery via Write-Ahead Log (WAL) undo/redo |
+| **Concurrency Safety** | Susceptible to dirty reads and lost updates | Isolated according to configured isolation level |
+| **Performance Overhead** | Lower latency per single statement | Minimal overhead for high-integrity multi-statement operations |
+
+---
+
+### 12. Important Exam & Interview Points
+* **ACID Acronym Definitions**: Know exact definitions for **Atomicity**, **Consistency**, **Isolation**, and **Durability**.
+* **4 Concurrency Anomalies**:
+  1. *Dirty Read*: Reading uncommitted data from another transaction.
+  2. *Non-Repeatable Read*: Reading the same row twice within a transaction and getting different values because another transaction committed an update.
+  3. *Phantom Read*: Re-executing a range query and discovering new rows inserted by another committed transaction.
+  4. *Lost Update*: Two transactions overwrite the same data without checking concurrent modifications.
+* **4 ANSI/ISO SQL Isolation Levels**:
+  * \`READ UNCOMMITTED\` (permits dirty reads, non-repeatable reads, phantom reads).
+  * \`READ COMMITTED\` (prevents dirty reads; permits non-repeatable reads, phantom reads).
+  * \`REPEATABLE READ\` (prevents dirty reads, non-repeatable reads; may permit phantom reads).
+  * \`SERIALIZABLE\` (prevents all anomalies; highest safety, lowest concurrency throughput).
+* **Write-Ahead Logging (WAL)**: Durability is achieved by writing transaction logs to disk *before* updating dirty data pages.
+
+---
+
+### 13. Short Recap
+* A database transaction is an atomic sequence of operations fulfilling the **ACID** properties.
+* **Atomicity** ensures all-or-nothing execution; **Consistency** protects data invariants; **Isolation** prevents concurrency interference; **Durability** guarantees permanence via WAL logs.
+* Always manage transactions explicitly using \`BEGIN TRANSACTION\`, \`COMMIT\`, and defensive \`ROLLBACK\` handlers.
+
+---
+
+### 14. Practice Questions & Detailed Explanations
+
+#### Question 1 (Atomicity Definition)
+**Question**: What does the **Atomicity** property in database transactions guarantee, and how does the DBMS enforce it if a crash occurs mid-transaction?
+* **Answer / Explanation**: **Atomicity** guarantees the "all-or-nothing" rule: all operations in the transaction must complete and commit, or none of them are reflected in the database. If a crash occurs mid-transaction, the DBMS recovery manager inspects the Write-Ahead Log (WAL) during restart and performs an \`UNDO\` operation to rollback all partial changes made by uncommitted transactions.
+
+#### Question 2 (Transaction Control Language)
+**Question**: Contrast the operational effects of \`COMMIT\` vs \`ROLLBACK\` on database state and active row locks.
+* **Answer / Explanation**: \`COMMIT\` makes all data modifications in the current transaction permanent and writes a commit record to the transaction log, while \`ROLLBACK\` cancels and reverses all modifications made since the start of the transaction. Both commands release all active locks held by the transaction, freeing resources for other concurrent sessions.
+
+#### Question 3 (Durability & Write-Ahead Logging)
+**Question**: How does a database achieve **Durability** even if system RAM loses power immediately after a \`COMMIT\` command returns?
+* **Answer / Explanation**: Modern databases use Write-Ahead Logging (WAL). Before a \`COMMIT\` returns success to the client, the transaction's log records are flushed to persistent, non-volatile disk/SSD storage. Even if volatile RAM is wiped, on reboot the database engine reads the WAL log and replays the committed changes (\`REDO\` phase) to restore the permanent state.
+
+#### Question 4 (Concurrency Anomalies)
+**Question**: What is a "Dirty Read", which ACID property protects against it, and what minimum isolation level prevents it?
+* **Answer / Explanation**: A "Dirty Read" occurs when Transaction T1 reads data modified by Transaction T2 before T2 commits. If T2 subsequently issues a \`ROLLBACK\`, T1 has operated on invalid data that never technically existed. The **Isolation** property prevents this anomaly, and the minimum ANSI isolation level that guarantees prevention of dirty reads is \`READ COMMITTED\`.
+
+#### Question 5 (Consistency vs Application Logic)
+**Question**: Explain how **Consistency** relies on both the DBMS engine and the application developer.
+* **Answer / Explanation**: The DBMS engine enforces physical and structural consistency through constraints (foreign keys, unique indexes, \`NOT NULL\`, and \`CHECK\` constraints). However, semantic business consistency (e.g., ensuring total debits equal total credits across multiple tables) is the responsibility of the application developer to encode properly within the transaction logic.
+`;
+}
+
+function buildComputerScienceNotes(
+  subject: string,
+  topic: string,
+  theory: string,
+  badge: string,
+  syllabusNote: string,
+  isExamMode: boolean
+): string {
+  const isJava = /java/i.test(subject) || /java/i.test(topic);
+  if (isJava) {
+    return buildJavaNotes(subject, topic, theory, badge, syllabusNote, isExamMode);
+  }
+
+  const isDbms = /dbms|sql|database/i.test(subject) || /dbms|sql|database|acid/i.test(topic);
+  if (isDbms) {
+    return buildDbmsNotes(subject, topic, theory, badge, syllabusNote, isExamMode);
+  }
+
+  const _isPython = /python/i.test(subject) || /python/i.test(topic);
+  const isOs = /os|operating system/i.test(subject) || /scheduling|round robin|deadlock/i.test(topic);
+
+  let lang = "python";
+  let codeSnippet = `# Complete, runnable Python module for ${topic}
+def calculate_metrics(data_points: list[float]) -> dict[str, float]:
+    """Computes basic statistical metrics with input validation."""
+    if not data_points:
+        raise ValueError("Data points list cannot be empty.")
+
+    total = sum(data_points)
+    count = len(data_points)
+    mean = total / count
+    variance = sum((x - mean) ** 2 for x in data_points) / count
+
+    return {
+        "count": count,
+        "sum": round(total, 2),
+        "mean": round(mean, 2),
+        "variance": round(variance, 2),
+    }
+
+if __name__ == "__main__":
+    sample_data = [10.5, 20.0, 30.5, 40.0, 50.0]
+    results = calculate_metrics(sample_data)
+    print("Computed Results:", results)
+`;
+  let expectedOutput = `Computed Results: {'count': 5, 'sum': 151.0, 'mean': 30.2, 'variance': 200.16}`;
+
+  if (isDbms) {
+    lang = "sql";
+    codeSnippet = `-- Production ACID Transaction Demonstration for ${topic}
+BEGIN TRANSACTION;
+
+-- Step 1: Validate sender balance and deduct $250
+UPDATE bank_accounts
+SET balance = balance - 250.00
+WHERE account_id = 'ACC_1001' AND balance >= 250.00;
+
+-- Step 2: Credit recipient account
+UPDATE bank_accounts
+SET balance = balance + 250.00
+WHERE account_id = 'ACC_2002';
+
+-- Step 3: Record audit trail entry
+INSERT INTO transaction_logs (sender_id, recipient_id, amount, status)
+VALUES ('ACC_1001', 'ACC_2002', 250.00, 'COMPLETED');
+
+-- Commit atomically to guarantee durability in WAL disk logs
+COMMIT;
+`;
+    expectedOutput = `Query OK, 3 rows affected (0.02 sec)
+Transaction committed successfully.`;
+  } else if (isOs) {
     lang = "c";
-    specializedBreakdown = `* **Preemptive Scheduling**: CPU allocation is granted for a fixed time quantum before forced preemption.
-* **Circular Ready Queue**: Processes are maintained in a FIFO circular queue. Preempted processes return to the tail of the queue.
-* **Turnaround & Waiting Metrics**: Turnaround Time ($TAT = CT - AT$) and Waiting Time ($WT = TAT - BT$) quantify scheduling efficiency.`;
-
-    code = `// Operating Systems: Round Robin Scheduling Metric Calculation
+    codeSnippet = `// Operating Systems: Round Robin Metric Calculation for ${topic}
 #include <stdio.h>
 
 struct Process {
     int id;
     int burstTime;
     int completionTime;
-    int turnaroundTime;
-    int waitingTime;
 };
 
-void calculateMetrics(struct Process p[], int n, int arrivalTime) {
+int main() {
+    struct Process processes[3] = {{1, 10, 10}, {2, 5, 15}, {3, 8, 23}};
+    int n = 3;
+
+    printf("PID\\tBurst\\tCompletion\\tTurnaround\\n");
     for (int i = 0; i < n; i++) {
-        p[i].turnaroundTime = p[i].completionTime - arrivalTime;
-        p[i].waitingTime = p[i].turnaroundTime - p[i].burstTime;
-        printf("P%d: BT=%d, CT=%d, TAT=%d, WT=%d\\n",
-               p[i].id, p[i].burstTime, p[i].completionTime, p[i].turnaroundTime, p[i].waitingTime);
+        int turnaround = processes[i].completionTime;
+        printf("P%d\\t%d\\t%d\\t\\t%d\\n", processes[i].id, processes[i].burstTime, processes[i].completionTime, turnaround);
     }
-}`;
-  } else if (isPython) {
-    lang = "python";
-    code = `# Clean, idiomatic Python implementation for ${topic}
-def execute_workflow(items: list[int]) -> dict[str, float]:
-    """Processes numeric data with clean validation."""
-    if not items:
-        raise ValueError("Collection cannot be empty")
-
-    total = sum(items)
-    avg = total / len(items)
-    return {"count": len(items), "sum": total, "average": round(avg, 2)}
-
-if __name__ == "__main__":
-    sample = [12, 24, 36, 48]
-    result = execute_workflow(sample)
-    print(f"Computed Result: {result}")`;
+    return 0;
+}
+`;
+    expectedOutput = `PID\tBurst\tCompletion\tTurnaround
+P1\t10\t10\t\t10
+P2\t5\t15\t\t15
+P3\t8\t23\t\t23`;
   }
 
   return `# ${topic}
@@ -1721,68 +2328,110 @@ ${badge}
 ${syllabusNote}
 ---
 
-### 1. Learning Objectives & Prerequisites
-By the end of this module, you will be able to:
-* Define and explain the architecture, data structures, and lifecycle of **${topic}**.
-* Write syntactically valid, runnable code in **${subject}** with defensive error handling.
-* Analyze computational time and space complexity ($O$-notation).
-* Diagnose edge cases (null inputs, boundary conditions) and runtime defects.
-
-*Prerequisites*: Core programming constructs, control flow, functions, and memory basics.
+### 1. Topic Title & Learning Objectives
+By completing this module on **${topic}**, you will master:
+* The core architectural principles, computational complexity, and runtime behavior of **${topic}**.
+* How to implement complete, syntactically valid code in **${subject}** with defensive error validation.
+* Space and time complexity tradeoffs ($O$-notation) and execution mechanics.
+* Edge cases and defensive patterns to prevent production defects.
 
 ---
 
-### 2. Comprehensive Concept Overview & Execution Mechanics
+### 2. Prerequisites & Background Context
+* General foundation in computer programming structures, memory layout, and control flow.
+* Understanding of system constraints, data structures, and computational complexity.
+
+---
+
+### 3. Clear Definition & Explanation (in beginner-friendly English)
 ${theory}
 
-In computer science, **${topic}** ensures robust system design, predictable runtime state transitions, and clean modularity.
+In computer science, **${topic}** ensures predictable system state transitions, computational efficiency, and robust data integrity across system lifecycles.
 
 ---
 
-### 3. Key Concepts & Structural Breakdown
-${specializedBreakdown}
+### 4. Why This Concept Is Useful & Where It Is Used
+* **High-Throughput Systems**: Optimizing algorithmic complexity ensures scalability under peak concurrent load.
+* **Production Reliability**: Handling edge cases and error bounds prevents unexpected crashes in live services.
 
 ---
 
-### 4. Technical Implementation & Runnable Syntax
+### 5. Syntax & Important Keywords Explanation
+* **Data Flow & Signatures**: Explicitly declaring parameters and return types prevents runtime typing mismatches.
+* **Control Structures**: Governing conditional branches, loops, and termination invariants.
+
+---
+
+### 6. Correct, Complete, Runnable Code Example
 \`\`\`${lang}
-${code}
+${codeSnippet}
 \`\`\`
 
 ---
 
-### 5. Algorithmic Complexity & Edge Cases
-* **Time Complexity**: Optimal execution paths ensure operations complete within predictable algorithmic bounds ($O(1)$, $O(\\log n)$, or $O(n)$).
-* **Space Complexity**: Efficient memory allocation prevents memory leaks and excessive heap pressure.
-* **Edge Case Verification**: Always inspect null states, empty collections, and boundary extremes.
+### 7. Line-by-Line Code Explanation
+* **Initialization**: The module establishes data structures and validates boundary conditions prior to execution.
+* **Processing**: Core computational logic transforms input data deterministically.
+* **Output / Persistence**: Verified output is emitted or persisted atomically to ensure system consistency.
 
 ---
 
-### 6. Comparative Analysis Table
-| Dimension | Standard Approach | Optimized Approach |
+### 8. Expected Console Output
+\`\`\`text
+${expectedOutput}
+\`\`\`
+
+---
+
+### 9. Practical Real-World Example
+In cloud microservices, implementing **${topic}** with defensive boundary checks prevents cascading failures across distributed service meshes when processing unpredictable client payloads.
+
+---
+
+### 10. Common Mistakes & How to Fix Them
+1. **Unchecked Boundaries**: Forgetting to validate null, empty, or negative inputs leads to unhandled runtime exceptions. Fix: Validate inputs at the system entry point.
+2. **Off-by-One Errors**: Accessing invalid indices triggers buffer overflows or indexing faults. Fix: Use standard collection iterators.
+3. **Ignoring Resource Lifecycles**: Failing to release locks or connections causes resource exhaustion. Fix: Always employ structured resource cleanup (\`try-with-resources\`, \`with\` statements, or \`finally\` blocks).
+
+---
+
+### 11. Comparative Analysis Table
+| Dimension | Naive Approach | Production Optimized Approach |
 | :--- | :--- | :--- |
-| **Time Complexity** | $O(n^2)$ naive search / traversal | $O(n \\log n)$ or $O(1)$ indexed access |
-| **Memory Allocation** | Redundant object creation on heap | In-place or cached reference reuse |
-| **Error Handling** | Unchecked runtime crash | Defensive parameter validation and structured exceptions |
+| **Time Complexity** | $O(n^2)$ unindexed search | $O(n \\log n)$ or $O(1)$ hashed/indexed lookup |
+| **Memory Allocation** | Redundant dynamic allocations | In-place or pooled reference reuse |
+| **Error Handling** | Silent crashes or uncaught exceptions | Explicit boundary validation and structured handling |
 
 ---
 
-### 7. Common Coding Misconceptions & Exam Traps
-1. **Confusing Reference Equality with Value Equality**: In languages like Java or Python, checking reference identity (\`==\` in Java) differs from checking logical value equivalence (\`.equals()\`).
-2. **Overlooking Off-by-One Indices**: Accessing array index $n$ for an array of length $n$ triggers runtime index-out-of-bounds exceptions.
-3. **Swallowing Exceptions Silently**: Catching exceptions in empty blocks hides defects and complicates root-cause isolation.
+### 12. Important Exam & Interview Points
+* Computational space and time complexity bounds.
+* Algorithmic tradeoffs between memory footprint and CPU utilization.
+* Deterministic error recovery and transaction safety guarantees.
 
 ---
 
-### 8. Practice Exercises & Solutions
-**Exercise 1**: What is the primary advantage of defensive input validation?
-* *Solution*: It rejects invalid inputs at system boundaries before corrupting application state or triggering unhandled exceptions.
+### 13. Short Recap
+* **${topic}** provides the foundational execution rules and data representations needed for reliable software.
+* Always validate inputs, account for asymptotic complexity, and ensure clean resource lifecycles.
 
 ---
 
-### 9. High-Yield Revision Summary
-* Ensure code is complete, syntactically valid, and cleanly formatted.
-* Account for edge cases and time/space complexity trade-offs.
+### 14. Practice Questions & Detailed Explanations
+**Question 1**: What is the primary purpose and benefit of implementing ${topic}?
+* *Answer*: It establishes predictable runtime invariants, optimal computational complexity, and robust data integrity.
+
+**Question 2**: How does defensive input validation prevent system defects in ${topic}?
+* *Answer*: It intercepts malformed, null, or out-of-range payloads at the interface boundary before corrupting internal state.
+
+**Question 3**: What is the time complexity difference between an unindexed search and an indexed/hashed lookup?
+* *Answer*: Unindexed search requires linear time ($O(n)$) or quadratic time ($O(n^2)$), whereas indexed search operates in logarithmic time ($O(\\log n)$) or constant time ($O(1)$).
+
+**Question 4**: Why must resources like database connections or file handles be explicitly closed?
+* *Answer*: Operating systems maintain strict limits on open file descriptors and socket pools. Failing to close them causes resource leaks and eventual service outages.
+
+**Question 5**: What edge cases must always be verified when handling data collections in ${topic}?
+* *Answer*: Null collections, zero-length empty collections, single-item collections, and extreme boundary values.
 `;
 }
 
@@ -1849,10 +2498,19 @@ In **${subject}**, mastering **${topic}** provides the essential conceptual foun
 
 ### 7. Practice Questions with Detailed Explanations
 **Question 1**: What is the core definition and importance of ${topic} within ${subject}?
-* *Explanation*: ${topic} establishes the foundational conceptual and practical rules required to analyze problems within ${subject}.
+* *Answer / Explanation*: ${topic} establishes the foundational conceptual and practical rules required to analyze problems within ${subject}.
 
 **Question 2**: How does a structured analytical framework improve problem-solving in ${topic}?
-* *Explanation*: It eliminates guesswork by systematically evaluating assumptions, constraints, and empirical evidence step-by-step.
+* *Answer / Explanation*: It eliminates guesswork by systematically evaluating assumptions, constraints, and empirical evidence step-by-step.
+
+**Question 3**: What is the key distinction between theoretical assumptions and empirical outcomes in ${topic}?
+* *Answer / Explanation*: Theoretical assumptions simplify models for analytical clarity, whereas empirical outcomes measure real-world performance subject to variable constraints.
+
+**Question 4**: How do common misconceptions in ${topic} lead to flawed conclusions?
+* *Answer / Explanation*: Misconceptions often stem from overgeneralization or conflating cause and effect, leading to invalid diagnostic assumptions.
+
+**Question 5**: What criteria should be used to evaluate the validity of evidence in ${topic}?
+* *Answer / Explanation*: Evidence must be evaluated against repeatability, verifiable empirical data, consistency with established domain laws, and absence of confounding variables.
 
 ---
 

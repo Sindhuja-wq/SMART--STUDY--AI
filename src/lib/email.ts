@@ -22,13 +22,23 @@ export async function sendOtpEmail(to: string, otp: string) {
   }
 
   if (!process.env.SMTP_HOST && !process.env.SMTP_SERVICE && !process.env.SMTP_USER) {
-    console.warn("Email provider is not fully configured in environment variables.");
-    throw new Error("Email provider configuration is missing (SMTP_HOST, SMTP_USER, SMTP_PASS).");
+    throw new Error("SMTP configuration missing: SMTP_HOST/SMTP_SERVICE, SMTP_USER, and SMTP_PASS must be configured.");
+  }
+
+  if (!process.env.SMTP_PASS) {
+    throw new Error("SMTP configuration missing: SMTP_PASS is required for email delivery.");
   }
 
   const isGmail =
     process.env.SMTP_SERVICE?.toLowerCase() === "gmail" ||
     process.env.SMTP_HOST?.toLowerCase().includes("gmail");
+
+  // Production-grade serverless timeout constraints (prevent function execution freeze)
+  const timeoutOptions = {
+    connectionTimeout: 8000, // 8s connection timeout
+    greetingTimeout: 8000,   // 8s greeting timeout
+    socketTimeout: 8000,     // 8s socket timeout
+  };
 
   const transporter = isGmail
     ? nodemailer.createTransport({
@@ -37,6 +47,7 @@ export async function sendOtpEmail(to: string, otp: string) {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS,
         },
+        ...timeoutOptions,
       })
     : nodemailer.createTransport({
         host: process.env.SMTP_HOST,
@@ -46,10 +57,11 @@ export async function sendOtpEmail(to: string, otp: string) {
           user: process.env.SMTP_USER,
           pass: process.env.SMTP_PASS,
         },
+        ...timeoutOptions,
       });
 
   const fromAddress =
-    process.env.SMTP_FROM ||
+    process.env.SMTP_FROM?.trim() ||
     (process.env.SMTP_USER ? `"Smart Study AI" <${process.env.SMTP_USER}>` : '"Smart Study AI" <noreply@smartstudyai.com>');
 
   const mailOptions = {

@@ -81,9 +81,11 @@ PEDAGOGICAL REQUIREMENTS FOR THIS DISCIPLINE:
 
 CRITICAL RULES:
 1. Adapt explanations strictly to ${subject}. Do NOT insert computer code, programming terminology, or generic ASCII workflows into non-computing disciplines.
-2. Complete all sentences and markdown sections. Never truncate mid-sentence.
-3. If formulas or calculations are required, show the step-by-step derivation with concrete numbers and verify the final answer.
-4. Output raw GitHub Flavored Markdown only.`;
+2. For computing and programming disciplines (e.g. Java, Python, SQL), all code must be 100% syntactically valid, complete, and runnable with main entry points, expected console output, and line-by-line explanations. Never use dummy stubs.
+3. Complete all sentences and markdown sections. Never truncate mid-sentence.
+4. If formulas or calculations are required, show the step-by-step derivation with concrete numbers and verify the final answer.
+5. In the final section, provide exactly 5 high-yield practice questions with detailed answers and explanations in a separate section.
+6. Output raw GitHub Flavored Markdown only.`;
 
     const userPrompt = `Generate comprehensive, exam-grade academic study notes for:
 Subject: "${subject}" (Domain: ${domainProfile.displayName})
@@ -94,12 +96,12 @@ Target Difficulty: ${difficulty}
 Estimated Study Time: ${studyTime} minutes
 Mode: ${isExamMode ? "High-Yield Exam Preparation & Problem Solving" : "Deep Course Mastery from Foundations to Advanced"}
 
-STRUCTURE YOUR NOTES ADAPTING TO THIS DISCIPLINE:
+STRUCTURE YOUR NOTES COVERING THESE EXACT SECTIONS:
 # ${topic.title}
 > **Subject**: ${subject} | **Domain**: ${domainProfile.displayName} | **Difficulty**: ${difficulty} | **Study Time**: ${studyTime} mins | **Mode**: ${isExamMode ? "Exam Preparation" : "Course Learning"}
 ${syllabus ? `> Grounded in requested syllabus scope: ${topic.title}\n` : ""}
 
-Follow these structural sections:
+Follow these structural sections in order:
 ${domainProfile.notesStructure.join("\n")}
 
 Respond ONLY with complete, high-yield, academically rigorous markdown.`;
@@ -114,8 +116,8 @@ Respond ONLY with complete, high-yield, academically rigorous markdown.`;
         prompt: userPrompt,
         formatJson: false,
         temperature: 0.25,
-        maxTokens: 2500,
-        timeoutMs: 25000,
+        maxTokens: 4000,
+        timeoutMs: 28000,
       });
 
       if (genResult.content && genResult.content.trim().length > 300) {
@@ -136,15 +138,15 @@ Respond ONLY with complete, high-yield, academically rigorous markdown.`;
 Your previous draft had the following critical issues:
 ${initialValidation.issues.map((iss) => `- ${iss}`).join("\n")}
 
-Please re-generate the complete study notes ensuring that ALL of the above issues are fully resolved. Ensure complete sentences, domain accuracy, and zero forbidden elements.`;
+Please re-generate the complete study notes ensuring that ALL of the above issues are fully resolved. Ensure complete sentences, domain accuracy, runnable examples with output, and zero forbidden elements.`;
 
           const repairResult = await generateAIContentDetailed({
             systemPrompt,
             prompt: repairPrompt,
             formatJson: false,
             temperature: 0.2,
-            maxTokens: 2500,
-            timeoutMs: 22000,
+            maxTokens: 4000,
+            timeoutMs: 28000,
           });
 
           if (repairResult.content && repairResult.content.trim().length > 300) {

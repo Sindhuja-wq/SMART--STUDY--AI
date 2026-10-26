@@ -213,7 +213,7 @@ function RoadmapView() {
             padding: "2.5rem 3rem", 
             position: "relative", 
             overflow: "hidden",
-            background: "linear-gradient(135deg, rgba(23, 32, 56, 0.85) 0%, rgba(17, 23, 43, 0.95) 100%)",
+            background: "var(--card-gradient)",
             borderLeft: isExam ? "4px solid var(--accent-amber)" : "4px solid var(--accent-primary)"
           }}
         >

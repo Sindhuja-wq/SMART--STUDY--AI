@@ -87,9 +87,9 @@ export async function generateAIContentDetailed(options: AIGenerationOptions): P
     addGroq();
     addGemini();
   } else {
-    // Default "auto": Prioritize configured cloud free tiers (Groq, then Gemini), then local Ollama
-    addGroq();
+    // Default "auto": Prioritize Google Gemini as primary cloud AI, then Groq, then local Ollama
     addGemini();
+    addGroq();
     addOllama();
   }
 
@@ -279,20 +279,18 @@ async function callGroqAPI(options: AIGenerationOptions, apiKey: string): Promis
 
 /**
  * Calls Google Gemini API (Free tier via Google AI Studio)
+ * Compatible with gemini-1.5-flash and gemini-2.0-flash
  */
 async function callGeminiAPI(options: AIGenerationOptions, apiKey: string): Promise<string | null> {
-  const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
-  const timeoutMs = options.timeoutMs ?? 25000;
+  const preferredModel = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+  const timeoutMs = options.timeoutMs ?? 28000;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const fullPrompt = options.systemPrompt
-      ? `${options.systemPrompt}\n\n${options.prompt}`
-      : options.prompt;
-
     const payload: {
       contents: Array<{ parts: Array<{ text: string }> }>;
+      systemInstruction?: { parts: Array<{ text: string }> };
       generationConfig: {
         temperature: number;
         maxOutputTokens: number;
@@ -301,26 +299,44 @@ async function callGeminiAPI(options: AIGenerationOptions, apiKey: string): Prom
     } = {
       contents: [
         {
-          parts: [{ text: fullPrompt }],
+          parts: [{ text: options.prompt }],
         },
       ],
       generationConfig: {
         temperature: options.temperature ?? 0.3,
-        maxOutputTokens: options.maxTokens ?? 2500,
+        maxOutputTokens: options.maxTokens ?? 4000,
       },
     };
+
+    if (options.systemPrompt) {
+      payload.systemInstruction = {
+        parts: [{ text: options.systemPrompt }],
+      };
+    }
 
     if (options.formatJson) {
       payload.generationConfig.responseMimeType = "application/json";
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-    const response = await fetch(url, {
+    let url = `https://generativelanguage.googleapis.com/v1beta/models/${preferredModel}:generateContent?key=${apiKey}`;
+    let response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
+
+    // If preferred model returned 404 Not Found, try alternate model (e.g. gemini-1.5-flash or gemini-2.0-flash)
+    if (response.status === 404) {
+      const fallbackModel = preferredModel === "gemini-2.0-flash" ? "gemini-1.5-flash" : "gemini-2.0-flash";
+      url = `https://generativelanguage.googleapis.com/v1beta/models/${fallbackModel}:generateContent?key=${apiKey}`;
+      response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    }
 
     clearTimeout(timeout);
 

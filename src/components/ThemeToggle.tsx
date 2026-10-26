@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Sun, Moon } from "lucide-react";
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -13,16 +13,41 @@ export function ThemeToggle() {
     return () => clearTimeout(timer);
   }, []);
 
-  if (!mounted) return <div style={{ width: 24, height: 24 }}></div>;
+  if (!mounted) {
+    return (
+      <div
+        style={{ width: 38, height: 38, borderRadius: "50%", background: "transparent" }}
+        aria-hidden="true"
+      />
+    );
+  }
+
+  const isDark = (resolvedTheme || theme) === "dark";
 
   return (
     <button
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+      type="button"
+      onClick={() => setTheme(isDark ? "light" : "dark")}
       className="btn btn-outline"
-      style={{ padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}
-      aria-label="Toggle Dark Mode"
+      style={{
+        width: 38,
+        height: 38,
+        padding: 0,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: "50%",
+        cursor: "pointer",
+        transition: "all 0.25s ease",
+      }}
+      aria-label={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
+      title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
     >
-      {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+      {isDark ? (
+        <Sun size={18} style={{ color: "var(--accent-amber)" }} />
+      ) : (
+        <Moon size={18} style={{ color: "var(--accent-primary)" }} />
+      )}
     </button>
   );
 }
