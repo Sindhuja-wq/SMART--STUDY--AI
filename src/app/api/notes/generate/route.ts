@@ -108,6 +108,7 @@ Respond ONLY with complete, high-yield, academically rigorous markdown.`;
 
     let generatedMarkdown = "";
     let isFallback = false;
+    let providerName: "gemini" | "groq" | "ollama" | "academic-fallback" = "academic-fallback";
 
     // AI Generation Attempt 1
     try {
@@ -130,6 +131,7 @@ Respond ONLY with complete, high-yield, academically rigorous markdown.`;
 
         if (initialValidation.valid) {
           generatedMarkdown = genResult.content.trim();
+          providerName = genResult.provider || "gemini";
         } else {
           console.warn(`[Notes Validation] Initial AI notes failed quality check (${initialValidation.issues.join("; ")}). Executing bounded repair retry...`);
 
@@ -158,6 +160,7 @@ Please re-generate the complete study notes ensuring that ALL of the above issue
             });
             if (repairValidation.valid) {
               generatedMarkdown = repairResult.content.trim();
+              providerName = repairResult.provider || "gemini";
             } else {
               console.warn(`[Notes Validation] Repaired draft still had issues (${repairValidation.issues.join("; ")}). Activating subject-aware educational fallback.`);
             }
@@ -171,6 +174,7 @@ Please re-generate the complete study notes ensuring that ALL of the above issue
     // High quality pedagogical fallback if cloud AI is offline or failed validation
     if (!generatedMarkdown) {
       isFallback = true;
+      providerName = "academic-fallback";
       generatedMarkdown = buildSubjectAwareFallbackNotes({
         subject,
         topicTitle: topic.title,
@@ -193,6 +197,7 @@ Please re-generate the complete study notes ensuring that ALL of the above issue
       notes: generatedMarkdown,
       domain,
       isFallback,
+      provider: providerName,
     });
   } catch (error: unknown) {
     console.error("Notes generation error:", error);

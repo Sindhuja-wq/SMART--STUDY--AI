@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense, useRef } from "react";
+import { useEffect, useState, Suspense, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
@@ -22,7 +22,6 @@ import {
   ArrowRight,
   ExternalLink,
   Sparkles,
-  Award,
   RefreshCw
 } from "lucide-react";
 
@@ -74,6 +73,7 @@ function RoadmapView() {
   const [activeTab, setActiveTab] = useState<"NOTES" | "VIDEO" | "PRACTICE">("NOTES");
   const [notesGenerating, setNotesGenerating] = useState(false);
   const [topicNotes, setTopicNotes] = useState<Record<string, string>>({});
+  const [topicProvider, setTopicProvider] = useState<Record<string, { isFallback?: boolean; provider?: string }>>({});
   const generatingNotesRef = useRef<Set<string>>(new Set());
 
   const loadNotes = async (topicId: string, force = false) => {
@@ -91,6 +91,9 @@ function RoadmapView() {
       if (res.ok) {
         const data = await res.json();
         setTopicNotes(prev => ({ ...prev, [topicId]: data.notes }));
+        if (data.provider || typeof data.isFallback === "boolean") {
+          setTopicProvider(prev => ({ ...prev, [topicId]: { isFallback: data.isFallback, provider: data.provider } }));
+        }
       }
     } catch (err) {
       console.error("Failed to load notes:", err);
@@ -100,7 +103,7 @@ function RoadmapView() {
     }
   };
 
-  const fetchRoadmap = async () => {
+  const fetchRoadmap = useCallback(async () => {
     try {
       const res = await fetch(`/api/roadmap/${params.id}`);
       if (res.ok) {
@@ -130,7 +133,7 @@ function RoadmapView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [params.id, activeTopic]);
 
   useEffect(() => {
     let ignore = false;
@@ -142,7 +145,7 @@ function RoadmapView() {
     return () => {
       ignore = true;
     };
-  }, [status, router, params.id]);
+  }, [status, router, fetchRoadmap]);
 
   if (loading || status === "loading") {
     return (
@@ -439,9 +442,20 @@ function RoadmapView() {
                             ) : topicNotes[topic.id] ? (
                               <div>
                                 <div className="flex-between mb-4" style={{ flexWrap: "wrap", gap: "0.5rem", borderBottom: "1px solid var(--border-subtle)", paddingBottom: "0.75rem" }}>
-                                  <span className="badge badge-primary" style={{ fontSize: "0.8rem", gap: "0.35rem" }}>
-                                    <BookOpen size={13} /> Curriculum Study Notes
-                                  </span>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                                    <span className="badge badge-primary" style={{ fontSize: "0.8rem", gap: "0.35rem" }}>
+                                      <BookOpen size={13} /> Curriculum Study Notes
+                                    </span>
+                                    {topicProvider[topic.id]?.isFallback ? (
+                                      <span className="badge badge-neutral" style={{ fontSize: "0.75rem", gap: "0.3rem" }} title="Synthesized by Smart Study Offline Academic Engine">
+                                        Offline Academic Engine
+                                      </span>
+                                    ) : topicProvider[topic.id]?.provider === "gemini" ? (
+                                      <span className="badge badge-success" style={{ fontSize: "0.75rem", gap: "0.3rem" }} title="Generated live by Google Gemini AI">
+                                        <Sparkles size={11} /> Google Gemini AI
+                                      </span>
+                                    ) : null}
+                                  </div>
                                   <button
                                     type="button"
                                     disabled={notesGenerating}
