@@ -7,6 +7,8 @@ import {
   classifySubject,
   getDomainProfile,
   buildSubjectAwareFallbackNotes,
+  normalizeAcademicTitle,
+  detectCourseSubjectAndDomain,
 } from "@/lib/subjectDomains";
 import { validateNotesContent } from "@/lib/academicValidator";
 
@@ -39,23 +41,66 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const subject = topic.roadmap.subject || "General Academic Studies";
+    if (!topic.isUnlocked) {
+      return NextResponse.json(
+        { error: "Forbidden: This topic is locked. Complete the prerequisite milestone quiz with 80%+ to unlock." },
+        { status: 403 }
+      );
+    }
+
+    const rawSubject = topic.roadmap.subject || "General Academic Studies";
+    const subject = normalizeAcademicTitle(rawSubject) || "General Academic Studies";
+    let effectiveTopicTitle = normalizeAcademicTitle(topic.title);
+
     const syllabus = topic.roadmap.syllabus || "";
+    const topicLower = effectiveTopicTitle.toLowerCase();
+    const subLower = subject.toLowerCase();
+    if (
+      !effectiveTopicTitle ||
+      topicLower === subLower ||
+      topicLower === "syllabus" ||
+      topicLower === "curriculum" ||
+      topicLower === "course outline" ||
+      /^(?:course|subject|syllabus|curriculum)\b/i.test(topicLower)
+    ) {
+      if (syllabus && syllabus.trim().length > 10) {
+        const course = detectCourseSubjectAndDomain(subject, syllabus);
+        if (course.topics.length > 0) {
+          effectiveTopicTitle = course.topics[0].title || course.topics[0].cleanTitle;
+        }
+      }
+
+      if (!effectiveTopicTitle || effectiveTopicTitle.toLowerCase() === subLower) {
+        if (subLower.includes("dbms") || subLower.includes("database")) {
+          effectiveTopicTitle = "DBMS Architecture & Relational Principles";
+        } else if (subLower.includes("java")) {
+          effectiveTopicTitle = "Java Foundations, Syntax & Runtime Architecture";
+        } else if (subLower.includes("operating system") || subLower === "os") {
+          effectiveTopicTitle = "Operating System Architecture & Process Management";
+        } else if (subLower.includes("algorithm")) {
+          effectiveTopicTitle = "Algorithmic Complexity & Core Design Techniques";
+        } else if (subLower.includes("economics")) {
+          effectiveTopicTitle = "Market Equilibrium & Economic Foundations";
+        } else {
+          effectiveTopicTitle = `${subject} Foundations & Core Principles`;
+        }
+      }
+    }
     const isExamMode = topic.roadmap.type === "EXAM";
     const difficulty = topic.difficulty || "Intermediate";
     const studyTime = topic.timeEstimate || 45;
 
-    const domain = classifySubject(subject, topic.title, syllabus);
+    const domain = classifySubject(subject, effectiveTopicTitle, syllabus);
     const domainProfile = getDomainProfile(domain, subject);
 
     // Caching check:
     // If notes exist and forceRegenerate is false, inspect cached notes quality.
-    // If the cached note contains legacy cross-domain contamination (e.g. old CS boilerplate in a Biology topic),
+    // If the cached note contains legacy cross-domain contamination or placeholder errors,
     // we safely bypass the stale cache to ensure educational accuracy.
     if (topic.notes && !forceRegenerate) {
       const cachedValidation = validateNotesContent(topic.notes, {
         subject,
-        topic: topic.title,
+        topic: effectiveTopicTitle,
         syllabus,
         domain,
       });
@@ -68,7 +113,7 @@ export async function POST(req: Request) {
           cached: true,
         });
       }
-      console.log(`[Notes Cache] Cached notes for '${topic.title}' failed current quality audit (${cachedValidation.issues.join(", ")}). Re-synthesizing fresh notes.`);
+      console.log(`[Notes Cache] Cached notes for '${effectiveTopicTitle}' failed current quality audit (${cachedValidation.issues.join(", ")}). Re-synthesizing fresh notes.`);
     }
 
     // Build discipline-specific, pedagogically grounded prompts
@@ -89,7 +134,7 @@ CRITICAL RULES:
 
     const userPrompt = `Generate comprehensive, exam-grade academic study notes for:
 Subject: "${subject}" (Domain: ${domainProfile.displayName})
-Topic Title: "${topic.title}"
+Topic Title: "${effectiveTopicTitle}"
 Context / Theory: "${topic.theory}"
 ${syllabus ? `Mandatory Syllabus Scope to Ground Content In:\n"""\n${syllabus}\n"""\n` : ""}
 Target Difficulty: ${difficulty}
@@ -97,9 +142,9 @@ Estimated Study Time: ${studyTime} minutes
 Mode: ${isExamMode ? "High-Yield Exam Preparation & Problem Solving" : "Deep Course Mastery from Foundations to Advanced"}
 
 STRUCTURE YOUR NOTES COVERING THESE EXACT SECTIONS:
-# ${topic.title}
+# ${effectiveTopicTitle}
 > **Subject**: ${subject} | **Domain**: ${domainProfile.displayName} | **Difficulty**: ${difficulty} | **Study Time**: ${studyTime} mins | **Mode**: ${isExamMode ? "Exam Preparation" : "Course Learning"}
-${syllabus ? `> Grounded in requested syllabus scope: ${topic.title}\n` : ""}
+${syllabus ? `> Grounded in requested syllabus scope: ${effectiveTopicTitle}\n` : ""}
 
 Follow these structural sections in order:
 ${domainProfile.notesStructure.join("\n")}
@@ -177,7 +222,7 @@ Please re-generate the complete study notes ensuring that ALL of the above issue
       providerName = "academic-fallback";
       generatedMarkdown = buildSubjectAwareFallbackNotes({
         subject,
-        topicTitle: topic.title,
+        topicTitle: effectiveTopicTitle,
         theory: topic.theory,
         difficulty: topic.difficulty,
         timeEstimate: topic.timeEstimate,

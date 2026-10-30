@@ -16,32 +16,49 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
-        });
+        try {
+          const cleanEmail = credentials.email.trim();
+          let user = await prisma.user.findUnique({
+            where: { email: cleanEmail.toLowerCase() },
+          });
 
-        if (!user) {
+          if (!user && cleanEmail !== cleanEmail.toLowerCase()) {
+            user = await prisma.user.findUnique({
+              where: { email: cleanEmail },
+            });
+          }
+
+          if (!user) {
+            return null;
+          }
+
+          if (!user.isVerified) {
+            throw new Error("Please verify your email before logging in.");
+          }
+
+          const isPasswordValid = await bcrypt.compare(
+            credentials.password,
+            user.password
+          );
+
+          if (!isPasswordValid) {
+            return null;
+          }
+
+          return {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+          };
+        } catch (error) {
+          if (error instanceof Error && error.message.includes("verify")) {
+            throw error;
+          }
+          const errorName = error instanceof Error ? error.name : "Error";
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error(`[Auth Diagnostic] Database/authorize failure: [${errorName}] ${errorMessage}`);
           return null;
         }
-
-        if (!user.isVerified) {
-          throw new Error("Please verify your email before logging in.");
-        }
-
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password,
-          user.password
-        );
-
-        if (!isPasswordValid) {
-          return null;
-        }
-
-        return {
-          id: user.id,
-          email: user.email,
-          role: user.role,
-        };
       },
     }),
   ],
@@ -67,4 +84,17 @@ export const authOptions: NextAuthOptions = {
   pages: {
     signIn: "/login",
   },
+  secret: process.env.NEXTAUTH_SECRET,
+  logger: {
+    error(code, metadata) {
+      console.error("[NextAuth error]:", code, metadata);
+    },
+    warn(code) {
+      console.warn("[NextAuth warn]:", code);
+    },
+    debug(code, metadata) {
+      console.log("[NextAuth debug]:", code, metadata);
+    },
+  },
 };
+

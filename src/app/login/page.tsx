@@ -7,14 +7,11 @@ import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { AuthVisualSide } from "@/components/AuthVisualSide";
 import { 
-  Lock, 
-  Mail, 
   Eye, 
   EyeOff, 
   ArrowRight, 
   Loader2, 
   AlertCircle, 
-  CheckCircle2, 
   HelpCircle,
   Sparkles
 } from "lucide-react";
@@ -126,7 +123,7 @@ export default function Login() {
         router.push("/dashboard");
         router.refresh();
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected network error occurred.");
     } finally {
       setLoading(false);

@@ -36,6 +36,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Topic not found or unauthorized" }, { status: 404 });
     }
 
+    if (!topic.isUnlocked) {
+      return NextResponse.json(
+        { error: "Forbidden: Cannot submit assessment for a locked topic." },
+        { status: 403 }
+      );
+    }
+
     const activeQuestions = topic.questions;
     const total = activeQuestions.length;
 
@@ -43,9 +50,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No active assessment questions found for this topic" }, { status: 400 });
     }
 
+    // Validate that every submitted question ID belongs to this topic's active questions
+    const activeQuestionMap = new Map(activeQuestions.map((q) => [q.id, q]));
+    for (const submittedQuestionId of Object.keys(answers)) {
+      if (!activeQuestionMap.has(submittedQuestionId)) {
+        return NextResponse.json(
+          { error: `Invalid question ID "${submittedQuestionId}" does not belong to this topic assessment.` },
+          { status: 400 }
+        );
+      }
+    }
+
     let correctCount = 0;
     activeQuestions.forEach((q) => {
-      if (answers[q.id] === q.correctOption) {
+      const selected = answers[q.id];
+      if (typeof selected === "number" && selected === q.correctOption) {
         correctCount++;
       }
     });

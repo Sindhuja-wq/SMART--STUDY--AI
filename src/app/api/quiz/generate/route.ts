@@ -43,6 +43,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    if (!topic.isUnlocked) {
+      return NextResponse.json(
+        { error: "Forbidden: This topic is locked. Complete prerequisite milestone quizzes to unlock." },
+        { status: 403 }
+      );
+    }
+
     // Check-only query from UI component
     if (checkOnly) {
       if (topic.questions.length === 5) {

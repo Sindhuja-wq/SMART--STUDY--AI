@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { generateAIContentDetailed } from "@/lib/ai";
-import { classifySubject, getDomainProfile, SubjectDomain } from "@/lib/subjectDomains";
+import { classifySubject, getDomainProfile, SubjectDomain, detectCourseSubjectAndDomain, normalizeAcademicTitle, determineTopicDifficulty, estimateTopicDuration, generateTopicTheoryDescription } from "@/lib/subjectDomains";
 
 interface GeneratedTopicInput {
   title: string;
@@ -11,6 +11,38 @@ interface GeneratedTopicInput {
   timeEstimate: number;
   difficulty: "Beginner" | "Intermediate" | "Advanced";
   videoUrl?: string;
+}
+
+export async function GET() {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const roadmaps = await prisma.roadmap.findMany({
+      where: { userId: session.user.id },
+      include: {
+        topics: {
+          select: {
+            id: true,
+            title: true,
+            theory: true,
+            isUnlocked: true,
+            quizScore: true,
+            order: true,
+          },
+          orderBy: { order: "asc" },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return NextResponse.json({ roadmaps });
+  } catch (error: unknown) {
+    console.error("Roadmap list fetch error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
@@ -60,11 +92,13 @@ export async function POST(req: Request) {
       }
     }
 
-    const domain = classifySubject(subject, title, syllabus);
-    const domainProfile = getDomainProfile(domain, subject);
+    const courseInfo = detectCourseSubjectAndDomain(subject, syllabus);
+    const effectiveSubject = courseInfo.subject || subject;
+    const domain = courseInfo.domain || classifySubject(effectiveSubject, title, syllabus);
+    const domainProfile = getDomainProfile(domain, effectiveSubject);
 
     const systemPrompt = `You are a distinguished university curriculum architect and senior academic director specializing in ${domainProfile.displayName}.
-Construct an authoritative, progressive learning roadmap tailored specifically for "${subject}".
+Construct an authoritative, progressive learning roadmap tailored specifically for "${effectiveSubject}".
 PEDAGOGICAL DISCIPLINE FOCUS: ${domainProfile.pedagogicalFocus}
 OUTPUT SPECIFICATION:
 Respond ONLY with a valid JSON array of milestone topic objects with the exact schema:
@@ -72,14 +106,17 @@ Respond ONLY with a valid JSON array of milestone topic objects with the exact s
   {
     "title": "Clear Topic Title",
     "theory": "Substantive pedagogical description of key concepts, formulas, mechanisms, or principles covered in this milestone.",
-    "timeEstimate": ${studyMinutes},
+    "timeEstimate": 60,
     "difficulty": "Beginner|Intermediate|Advanced"
   }
 ]
 CRITICAL RULES:
 1. Every milestone MUST relate directly to "${subject}". Do NOT include generic Computer Science or software programming topics unless the subject is Computer Science.
-2. If a custom syllabus is provided, treat it as the primary scope and map the syllabus units directly into sequential milestones.
-3. Respond ONLY with valid raw JSON. No markdown fences, no conversational preamble.`;
+2. If a custom syllabus is provided, treat it as the primary scope and map the syllabus units directly into sequential milestones in exact order, starting with Unit 1 (do NOT insert a broad combined overview module ahead of Unit 1 unless explicitly requested as an overview).
+3. Assign appropriate difficulty labels: introductory definitions, types, and foundational concepts MUST be marked "Beginner", core mechanisms "Intermediate", and advanced algorithms or proofs "Advanced".
+4. Estimate realistic study times for each milestone based on topic scope and complexity (between 30 and 150 minutes), avoiding identical durations across all milestones.
+5. Provide substantive pedagogical descriptions of core mechanisms without generic template phrases.
+6. Respond ONLY with valid raw JSON. No markdown fences, no conversational preamble.`;
 
     let userPrompt = "";
     if (type === "EXAM") {
@@ -144,17 +181,23 @@ Respond ONLY with a valid JSON array.`;
           for (const item of candidateArray) {
             const t = item as Partial<GeneratedTopicInput>;
             if (t && typeof t.title === "string" && typeof t.theory === "string") {
+              const rawT = t.title.trim();
               const diff: "Beginner" | "Intermediate" | "Advanced" =
-                t.difficulty === "Beginner" || t.difficulty === "Advanced" ? t.difficulty : "Intermediate";
-              const est = typeof t.timeEstimate === "number" && t.timeEstimate > 0 ? t.timeEstimate : studyMinutes;
+                t.difficulty === "Beginner" || t.difficulty === "Advanced" || t.difficulty === "Intermediate"
+                  ? t.difficulty
+                  : determineTopicDifficulty(rawT, rawT, undefined, domain);
+              const est =
+                typeof t.timeEstimate === "number" && t.timeEstimate > 0
+                  ? t.timeEstimate
+                  : estimateTopicDuration(rawT, rawT, diff, studyMinutes);
 
               generatedTopics.push({
-                title: t.title.trim(),
+                title: rawT,
                 theory: t.theory.trim(),
                 timeEstimate: est,
                 difficulty: diff,
                 videoUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(
-                  `${subject} ${t.title.trim()} tutorial`
+                  `${subject} ${rawT} tutorial`
                 )}`,
               });
             }
@@ -168,7 +211,7 @@ Respond ONLY with a valid JSON array.`;
     // Adaptive Curriculum Fallback if AI provider is offline or returned invalid JSON
     if (generatedTopics.length === 0) {
       generatedTopics = buildSubjectAwareMilestoneRoadmap({
-        subject,
+        subject: effectiveSubject,
         domain,
         syllabus,
         studyMinutes,
@@ -183,7 +226,7 @@ Respond ONLY with a valid JSON array.`;
         data: {
           userId: session.user.id,
           title: title.trim(),
-          subject: subject.trim(),
+          subject: effectiveSubject.trim(),
           syllabus: syllabus ? syllabus.trim() : null,
           type,
           examDate: examDateObj,
@@ -234,24 +277,29 @@ function buildSubjectAwareMilestoneRoadmap(params: {
 
   // 1. If user supplied a custom syllabus, parse each line/chapter directly
   if (syllabus && syllabus.trim().length > 10) {
-    const rawLines = syllabus
-      .split(/\n|,|;/)
-      .map((line) => line.replace(/^[\d\.\-\*\•\)\s]+/, "").trim())
-      .filter((line) => line.length > 2 && !/^(unit|chapter|section)\s*\d+$/i.test(line));
+    const courseInfo = detectCourseSubjectAndDomain(subject, syllabus);
+    if (courseInfo.topics.length >= 2) {
+      const selectedTopics = courseInfo.topics.slice(0, 8);
+      const cleanSub = normalizeAcademicTitle(courseInfo.subject || subject) || "Computer Science";
+      return selectedTopics.map((item) => {
+        const cleanTitle = normalizeAcademicTitle(item.cleanTitle || item.title);
+        const originalHasUnit = /^(?:unit|chapter|module|part|section|\d+[\.\:\-\)])\s*\d*/i.test(item.title);
+        const milestoneTitle = originalHasUnit
+          ? normalizeAcademicTitle(item.title)
+          : (item.unitNumber ? `Unit ${item.unitNumber}: ${cleanTitle}` : cleanTitle);
 
-    if (rawLines.length >= 2) {
-      const selectedLines = rawLines.slice(0, 8);
-      return selectedLines.map((line, idx) => {
-        const total = selectedLines.length;
-        const diff: "Beginner" | "Intermediate" | "Advanced" =
-          idx === 0 ? "Beginner" : idx < total - 2 ? "Intermediate" : "Advanced";
+        const diff = determineTopicDifficulty(item.title, cleanTitle, item.unitNumber, domain);
+        const timeEst = estimateTopicDuration(item.title, cleanTitle, diff, studyMinutes);
+        const theoryStr = generateTopicTheoryDescription(item.title, cleanTitle, cleanSub, item.unitNumber);
 
         return {
-          title: line,
-          theory: `Comprehensive academic principles, core mechanisms, worked examples, and exam problem strategies for ${line} in ${subject}.`,
-          timeEstimate: studyMinutes,
+          title: milestoneTitle,
+          theory: theoryStr,
+          timeEstimate: timeEst,
           difficulty: diff,
-          videoUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(`${subject} ${line} lecture`)}`,
+          videoUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(
+            `${cleanSub} ${cleanTitle} lecture`
+          )}`,
         };
       });
     }

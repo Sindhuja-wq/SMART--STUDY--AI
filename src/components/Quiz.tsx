@@ -440,25 +440,10 @@ export function Quiz({ topicId, onComplete }: { topicId: string; onComplete: () 
                     className={`quiz-option ${isSelected ? 'selected' : ''}`}
                     onClick={() => setAnswers({ ...answers, [q.id]: optIdx })}
                   >
-                    <div 
-                      style={{ 
-                        width: "28px", 
-                        height: "28px", 
-                        borderRadius: "8px", 
-                        background: isSelected ? "var(--accent-primary)" : "rgba(255,255,255,0.06)",
-                        color: isSelected ? "#080B18" : "var(--text-secondary)",
-                        display: "flex", 
-                        alignItems: "center", 
-                        justifyContent: "center",
-                        fontWeight: 700,
-                        fontSize: "0.8rem",
-                        flexShrink: 0,
-                        transition: "all 0.2s ease"
-                      }}
-                    >
+                    <div className="quiz-option-letter">
                       {optionLetters[optIdx]}
                     </div>
-                    <span style={{ fontSize: "0.95rem", color: isSelected ? "#F8FAFC" : "var(--text-secondary)" }}>
+                    <span className="quiz-option-text">
                       {opt}
                     </span>
                   </div>

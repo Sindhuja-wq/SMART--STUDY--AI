@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -23,8 +23,10 @@ import {
 interface RoadmapTopic {
   id: string;
   title: string;
+  theory?: string;
   isUnlocked: boolean;
   quizScore?: number | null;
+  order?: number;
 }
 
 interface RoadmapSummary {
@@ -72,7 +74,7 @@ export default function Dashboard() {
     { name: "Computer Science", title: "Data Structures, Algorithms & Systems", time: "60" },
   ];
 
-  const fetchRoadmaps = async () => {
+  const fetchRoadmaps = useCallback(async () => {
     try {
       const res = await fetch("/api/roadmap");
       if (res.ok) {
@@ -84,15 +86,19 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
+    let ignore = false;
     if (status === "unauthenticated") {
       router.push("/login");
-    } else if (status === "authenticated") {
-      fetchRoadmaps();
+    } else if (status === "authenticated" && !ignore) {
+      void fetchRoadmaps();
     }
-  }, [status, router]);
+    return () => {
+      ignore = true;
+    };
+  }, [status, router, fetchRoadmaps]);
 
   const selectPresetSubject = (sub: typeof popularSubjects[0]) => {
     setFormData(prev => ({
@@ -151,7 +157,7 @@ export default function Dashboard() {
         const errData = await res.json().catch(() => ({}));
         alert(errData.error || "Failed to create roadmap. Please verify details.");
       }
-    } catch (err) {
+    } catch {
       clearInterval(interval);
       alert("Network error while creating roadmap.");
     } finally {
@@ -191,13 +197,13 @@ export default function Dashboard() {
   let totalTopics = 0;
   let totalCompletedTopics = 0;
   let nearestExamInfo: ExamCountdownInfo | null = null;
-  let continueRoadmap: any = null;
-  let continueTopic: any = null;
+  let continueRoadmap: RoadmapSummary | null = null;
+  let continueTopic: RoadmapTopic | null = null;
 
   for (const rm of roadmaps) {
     const rmTotal = rm.topics?.length || 0;
     totalTopics += rmTotal;
-    const completed = rm.topics?.filter((t: any) => t.isUnlocked && t.quizScore && t.quizScore >= 80).length || 0;
+    const completed = rm.topics?.filter((t: RoadmapTopic) => t.isUnlocked && t.quizScore && t.quizScore >= 80).length || 0;
     totalCompletedTopics += completed;
 
     // Exam countdown
@@ -214,7 +220,7 @@ export default function Dashboard() {
 
     // Determine "Continue Learning" target
     if (!continueRoadmap) {
-      const nextIncomplete = rm.topics?.find((t: any) => t.isUnlocked && (!t.quizScore || t.quizScore < 80));
+      const nextIncomplete = rm.topics?.find((t: RoadmapTopic) => t.isUnlocked && (!t.quizScore || t.quizScore < 80));
       if (nextIncomplete) {
         continueRoadmap = rm;
         continueTopic = nextIncomplete;
@@ -536,7 +542,7 @@ export default function Dashboard() {
             <div className="grid-2">
               {filteredRoadmaps.map((rm) => {
                 const total = rm.topics?.length || 0;
-                const completed = rm.topics?.filter((t: any) => t.isUnlocked && t.quizScore && t.quizScore >= 80).length || 0;
+                const completed = rm.topics?.filter((t: RoadmapTopic) => t.isUnlocked && t.quizScore && t.quizScore >= 80).length || 0;
                 const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
                 const isExam = rm.type === "EXAM";
                 

@@ -6,18 +6,15 @@ import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { AuthVisualSide } from "@/components/AuthVisualSide";
 import { 
-  Lock, 
-  Mail, 
-  User, 
   Eye, 
   EyeOff, 
   ArrowRight, 
   Loader2, 
   AlertCircle, 
   CheckCircle2, 
-  RotateCcw,
-  Sparkles,
-  KeyRound
+  RotateCcw, 
+  Sparkles, 
+  KeyRound 
 } from "lucide-react";
 
 export default function Register() {
@@ -77,7 +74,7 @@ export default function Register() {
       } else {
         setError(data.error || "Registration failed. Please check your details.");
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected network error occurred.");
     } finally {
       setLoading(false);
@@ -103,7 +100,7 @@ export default function Register() {
       } else {
         setError(data.error || "Failed to resend verification code.");
       }
-    } catch (err) {
+    } catch {
       setError("Network error while resending code.");
     } finally {
       setLoading(false);
@@ -131,7 +128,7 @@ export default function Register() {
       } else {
         setError(data.error || "Verification failed. Please check the code.");
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred during verification.");
     } finally {
       setLoading(false);

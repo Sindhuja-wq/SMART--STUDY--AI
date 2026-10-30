@@ -7,14 +7,8 @@ import { Navbar } from "@/components/Navbar";
 import { 
   Brain, 
   Target, 
-  Award, 
   ArrowRight, 
   Sparkles, 
-  BookOpen, 
-  Clock, 
-  CheckCircle2, 
-  ShieldCheck, 
-  Zap,
   GraduationCap
 } from "lucide-react";
 

@@ -7,6 +7,7 @@ import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { Navbar } from "@/components/Navbar";
 import { Quiz } from "@/components/Quiz";
+import { NotesDoubtSolver } from "@/components/NotesDoubtSolver";
 import { 
   Lock, 
   CheckCircle2, 
@@ -76,7 +77,7 @@ function RoadmapView() {
   const [topicProvider, setTopicProvider] = useState<Record<string, { isFallback?: boolean; provider?: string }>>({});
   const generatingNotesRef = useRef<Set<string>>(new Set());
 
-  const loadNotes = async (topicId: string, force = false) => {
+  const loadNotes = useCallback(async (topicId: string, force = false) => {
     if (!force && topicNotes[topicId]) return;
     if (generatingNotesRef.current.has(topicId)) return;
 
@@ -101,7 +102,7 @@ function RoadmapView() {
       generatingNotesRef.current.delete(topicId);
       setNotesGenerating(false);
     }
-  };
+  }, [topicNotes]);
 
   const fetchRoadmap = useCallback(async () => {
     try {
@@ -133,7 +134,7 @@ function RoadmapView() {
     } finally {
       setLoading(false);
     }
-  }, [params.id, activeTopic]);
+  }, [params.id, activeTopic, loadNotes]);
 
   useEffect(() => {
     let ignore = false;
@@ -469,6 +470,16 @@ function RoadmapView() {
                                   </button>
                                 </div>
                                 <ReactMarkdown>{topicNotes[topic.id]}</ReactMarkdown>
+                                
+                                {/* AI Doubt Solver Context-Aware Assistant */}
+                                <NotesDoubtSolver
+                                  key={topic.id}
+                                  topicId={topic.id}
+                                  topicTitle={topic.title}
+                                  subject={roadmap.subject}
+                                  notes={topicNotes[topic.id]}
+                                  notesGenerating={notesGenerating}
+                                />
                                 
                                 {/* Call to action after reading notes */}
                                 <div 

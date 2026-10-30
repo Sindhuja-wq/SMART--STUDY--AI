@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -31,7 +31,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/users");
       if (res.ok) {
@@ -43,19 +43,23 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
+    let ignore = false;
     if (status === "unauthenticated") {
       router.push("/login");
     } else if (status === "authenticated") {
-      if (session.user.role !== "ADMIN") {
+      if (session?.user?.role !== "ADMIN") {
         router.push("/dashboard");
-      } else {
-        fetchUsers();
+      } else if (!ignore) {
+        void fetchUsers();
       }
     }
-  }, [status, router, session]);
+    return () => {
+      ignore = true;
+    };
+  }, [status, router, session, fetchUsers]);
 
   if (status === "loading" || loading) {
     return (

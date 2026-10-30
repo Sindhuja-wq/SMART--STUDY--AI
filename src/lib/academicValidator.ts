@@ -26,6 +26,389 @@ export interface QuizValidationResult {
   warnings?: string[];
 }
 
+export interface JavaCodeValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+  publicClassName?: string;
+  expectedFileName?: string;
+  isBalanced: boolean;
+  hasBrokenStringLiterals: boolean;
+  compiledWithJavac?: boolean;
+}
+
+/**
+ * Checks whether the javac compiler is available on the host system PATH.
+ */
+let cachedJavacAvailable: boolean | null = null;
+export function isJavacAvailable(forceRefresh = false): boolean {
+  if (cachedJavacAvailable !== null && !forceRefresh) return cachedJavacAvailable;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const cp = require("node:child_process");
+    if (typeof cp.spawnSync === "function") {
+      const res = cp.spawnSync("javac", ["-version"], { stdio: "ignore", shell: true });
+      cachedJavacAvailable = res.status === 0;
+      return cachedJavacAvailable;
+    }
+  } catch {
+    // Javac not available
+  }
+  cachedJavacAvailable = false;
+  return false;
+}
+
+export function setCachedJavacAvailableForTesting(value: boolean | null): void {
+  cachedJavacAvailable = value;
+}
+
+/**
+ * Compiles a Java source code snippet using javac if available on the system.
+ * Creates an isolated temp directory, writes the .java file matching the public class name,
+ * executes `javac`, and captures any compilation diagnostics.
+ */
+export function compileJavaSnippetWithJavac(
+  code: string,
+  fileName?: string
+): { success: boolean; errors: string[]; attempted: boolean } {
+  if (!isJavacAvailable()) {
+    return { success: true, errors: [], attempted: false };
+  }
+
+  // Only attempt javac compilation if the snippet contains a class declaration
+  const classMatch = code.match(/\b(?:public\s+(?:final\s+|abstract\s+)?)?class\s+([A-Za-z0-9_$]+)/);
+  if (!classMatch) {
+    return { success: true, errors: [], attempted: false };
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const fs = require("node:fs");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const os = require("node:os");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const path = require("node:path");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const cp = require("node:child_process");
+
+  let tmpDir = "";
+  try {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "smart-study-javac-"));
+    const targetBaseName = fileName ? path.basename(fileName) : `${classMatch[1]}.java`;
+    const targetFilePath = path.join(tmpDir, targetBaseName);
+    fs.writeFileSync(targetFilePath, code, "utf8");
+
+    const compileRes = cp.spawnSync("javac", [targetBaseName], {
+      cwd: tmpDir,
+      encoding: "utf8",
+      shell: true,
+      timeout: 10000,
+    });
+
+    if (compileRes.status !== 0) {
+      const output = ((compileRes.stderr || "") + "\n" + (compileRes.stdout || "")).trim();
+      const lines = output
+        .split("\n")
+        .map((l: string) => l.trim())
+        .filter((l: string) => l.length > 0 && !l.includes("Note:"));
+      return {
+        success: false,
+        errors: lines.length > 0 ? lines : ["javac compiler reported an error."],
+        attempted: true,
+      };
+    }
+
+    return { success: true, errors: [], attempted: true };
+  } catch (err) {
+    return {
+      success: false,
+      errors: [`Failed to execute javac: ${err instanceof Error ? err.message : String(err)}`],
+      attempted: true,
+    };
+  } finally {
+    if (tmpDir) {
+      try {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      } catch {
+        // Ignore cleanup failure in temp dir
+      }
+    }
+  }
+}
+
+/**
+ * Validates a Java source code snippet:
+ * - Scans for unescaped raw newlines inside string literals ("...") that cause compile failures
+ * - Verifies balanced delimiters: (), {}, []
+ * - Ensures public class name matches the declared filename
+ * - Detects multiple public classes or illegal escape sequences
+ */
+export function validateJavaCodeSnippet(
+  code: string,
+  declaredFileName?: string
+): JavaCodeValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  let isBalanced = true;
+  let hasBrokenStringLiterals = false;
+
+  if (!code || typeof code !== "string" || code.trim().length === 0) {
+    return {
+      valid: false,
+      errors: ["Java code snippet is empty."],
+      warnings,
+      isBalanced: false,
+      hasBrokenStringLiterals: false,
+    };
+  }
+
+  // 1. Scan for public class declarations
+  const publicClassMatches = Array.from(
+    code.matchAll(/\bpublic\s+(?:final\s+|abstract\s+)?class\s+([A-Za-z0-9_$]+)/g)
+  );
+  let publicClassName: string | undefined;
+  let expectedFileName: string | undefined;
+
+  if (publicClassMatches.length > 1) {
+    errors.push(
+      `Multiple public classes found (${publicClassMatches.map((m) => m[1]).join(", ")}). Java allows at most one public class per compilation unit.`
+    );
+  } else if (publicClassMatches.length === 1) {
+    publicClassName = publicClassMatches[0][1];
+    expectedFileName = `${publicClassName}.java`;
+  }
+
+  // Check explicit file comment e.g. // File: StudentManagementSystem.java
+  const explicitFileMatch = code.match(/\/\/\s*(?:File:\s*)?([A-Za-z0-9_$-]+\.java)\b/i);
+  const activeFileName = declaredFileName || (explicitFileMatch ? explicitFileMatch[1] : undefined);
+
+  if (publicClassName && activeFileName) {
+    const cleanActive = activeFileName.replace(/^.*[\\\/]/, "").trim();
+    if (cleanActive.toLowerCase() !== expectedFileName?.toLowerCase()) {
+      errors.push(
+        `Public class '${publicClassName}' requires filename '${expectedFileName}', but '${cleanActive}' was declared.`
+      );
+    }
+  }
+
+  // 2. Character scanner for string literal integrity and delimiter balancing
+  type Delimiter = { char: "{" | "(" | "["; line: number; col: number };
+  const delimiterStack: Delimiter[] = [];
+
+  let inBlockComment = false;
+  let inLineComment = false;
+  let inTextBlock = false; // Java 15+ """
+  let inStringLiteral = false;
+  let inCharLiteral = false;
+  let stringLiteralStartLine = 0;
+  let stringLiteralStartCol = 0;
+  let charLiteralStartLine = 0;
+
+  let line = 1;
+  let col = 0;
+
+  for (let i = 0; i < code.length; i++) {
+    const ch = code[i];
+    const nextCh = i + 1 < code.length ? code[i + 1] : "";
+    const next2Ch = i + 2 < code.length ? code[i + 2] : "";
+    col++;
+
+    // Track line numbers
+    if (ch === "\n") {
+      // Standard string literal broken across raw newline
+      if (inStringLiteral && !inTextBlock) {
+        hasBrokenStringLiterals = true;
+        errors.push(
+          `Unclosed string literal or unescaped raw newline inside quotes at line ${stringLiteralStartLine}, column ${stringLiteralStartCol}. Java string literals cannot span newlines without concatenation or text blocks (""").`
+        );
+        inStringLiteral = false; // recover scanner
+      }
+
+      if (inCharLiteral) {
+        errors.push(`Unclosed character literal across newline at line ${charLiteralStartLine}.`);
+        inCharLiteral = false;
+      }
+
+      if (inLineComment) {
+        inLineComment = false;
+      }
+
+      line++;
+      col = 0;
+      continue;
+    }
+
+    if (ch === "\r") {
+      continue;
+    }
+
+    // Inside Line Comment
+    if (inLineComment) {
+      continue;
+    }
+
+    // Inside Block Comment
+    if (inBlockComment) {
+      if (ch === "*" && nextCh === "/") {
+        inBlockComment = false;
+        i++;
+        col++;
+      }
+      continue;
+    }
+
+    // Inside Text Block (""")
+    if (inTextBlock) {
+      if (ch === "\\" && nextCh === "\\") {
+        i++;
+        col++;
+        continue;
+      }
+      if (ch === '"' && nextCh === '"' && next2Ch === '"') {
+        inTextBlock = false;
+        i += 2;
+        col += 2;
+      }
+      continue;
+    }
+
+    // Inside Standard String Literal ("...")
+    if (inStringLiteral) {
+      if (ch === "\\") {
+        if (nextCh === "\n" || nextCh === "\r" || nextCh === "") {
+          hasBrokenStringLiterals = true;
+          errors.push(`Illegal dangling escape at line ${line}.`);
+        }
+        i++; // skip escaped char
+        col++;
+        continue;
+      }
+      if (ch === '"') {
+        inStringLiteral = false;
+      }
+      continue;
+    }
+
+    // Inside Character Literal ('...')
+    if (inCharLiteral) {
+      if (ch === "\\") {
+        i++;
+        col++;
+        continue;
+      }
+      if (ch === "'") {
+        inCharLiteral = false;
+      }
+      continue;
+    }
+
+    // Comments start
+    if (ch === "/" && nextCh === "/") {
+      inLineComment = true;
+      i++;
+      col++;
+      continue;
+    }
+    if (ch === "/" && nextCh === "*") {
+      inBlockComment = true;
+      i++;
+      col++;
+      continue;
+    }
+
+    // Text Block start (""")
+    if (ch === '"' && nextCh === '"' && next2Ch === '"') {
+      inTextBlock = true;
+      i += 2;
+      col += 2;
+      continue;
+    }
+
+    // String Literal start (")
+    if (ch === '"') {
+      inStringLiteral = true;
+      stringLiteralStartLine = line;
+      stringLiteralStartCol = col;
+      continue;
+    }
+
+    // Character Literal start (')
+    if (ch === "'") {
+      inCharLiteral = true;
+      charLiteralStartLine = line;
+      continue;
+    }
+
+    // Delimiter Balancing
+    if (ch === "{" || ch === "(" || ch === "[") {
+      delimiterStack.push({ char: ch, line, col });
+    } else if (ch === "}") {
+      const top = delimiterStack.pop();
+      if (!top || top.char !== "{") {
+        isBalanced = false;
+        errors.push(`Mismatched or unexpected closing brace '}' at line ${line}, column ${col}.`);
+      }
+    } else if (ch === ")") {
+      const top = delimiterStack.pop();
+      if (!top || top.char !== "(") {
+        isBalanced = false;
+        errors.push(`Mismatched or unexpected closing parenthesis ')' at line ${line}, column ${col}.`);
+      }
+    } else if (ch === "]") {
+      const top = delimiterStack.pop();
+      if (!top || top.char !== "[") {
+        isBalanced = false;
+        errors.push(`Mismatched or unexpected closing bracket ']' at line ${line}, column ${col}.`);
+      }
+    }
+  }
+
+  if (inStringLiteral) {
+    hasBrokenStringLiterals = true;
+    errors.push(`Unclosed string literal starting at line ${stringLiteralStartLine}, column ${stringLiteralStartCol}.`);
+  }
+  if (inCharLiteral) {
+    errors.push(`Unclosed character literal starting at line ${charLiteralStartLine}.`);
+  }
+  if (inBlockComment) {
+    errors.push("Unclosed block comment (/*) at end of file.");
+  }
+  if (delimiterStack.length > 0) {
+    isBalanced = false;
+    for (const d of delimiterStack) {
+      errors.push(`Unclosed delimiter '${d.char}' opened at line ${d.line}, column ${d.col}.`);
+    }
+  }
+
+  // 3. Optional real javac compilation if compiler is present on the host
+  let compiledWithJavac = false;
+  if (errors.length === 0 && isBalanced && !hasBrokenStringLiterals) {
+    if (isJavacAvailable() && /\bclass\s+[A-Za-z0-9_$]+/i.test(code)) {
+      const targetName = expectedFileName || declaredFileName || (explicitFileMatch ? explicitFileMatch[1] : undefined);
+      const compileResult = compileJavaSnippetWithJavac(code, targetName);
+      if (compileResult.attempted) {
+        compiledWithJavac = true;
+        if (!compileResult.success) {
+          for (const cErr of compileResult.errors) {
+            errors.push(`javac compile error: ${cErr}`);
+          }
+        }
+      }
+    }
+  }
+
+  const valid = errors.length === 0 && isBalanced && !hasBrokenStringLiterals;
+  return {
+    valid,
+    errors,
+    warnings,
+    publicClassName,
+    expectedFileName,
+    isBalanced,
+    hasBrokenStringLiterals,
+    compiledWithJavac,
+  };
+}
+
 /**
  * Validates generated study notes against strict pedagogical, structural,
  * domain relevance, and academic integrity criteria.
@@ -107,6 +490,59 @@ export function validateNotesContent(
   }
   if (duplicateCount > 0) {
     issues.push(`Detected ${duplicateCount} repeated/duplicated paragraph(s) used to inflate note length.`);
+  }
+
+  // 4b. Excessive Mechanical Repetition of Full Topic Title in Body Text
+  // If the topic is a multi-word phrase (length > 10, >= 2 words), count its occurrences in non-heading body text.
+  // Genuine educational writing refers to concepts by their specific sub-terms (e.g. "relational model", "tables"),
+  // not by mechanically copy-pasting the full 4-8 word syllabus header into every paragraph or practice question.
+  if (context.topic && context.topic.trim().length > 10) {
+    const rawTopicClean = context.topic.trim();
+    const isMultiWord = rawTopicClean.split(/\s+/).length >= 2;
+    if (isMultiWord) {
+      // Exclude markdown headings and metadata quote blocks from repetition counting
+      const bodyLines = trimmed
+        .split("\n")
+        .filter((l) => !l.trim().startsWith("#") && !l.trim().startsWith(">"))
+        .join("\n");
+      const topicEscaped = rawTopicClean.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const topicOccurrences = (bodyLines.match(new RegExp(topicEscaped, "gi")) || []).length;
+      if (topicOccurrences > 4) {
+        issues.push(
+          `Detected excessive mechanical repetition of topic title '${rawTopicClean}' (${topicOccurrences} occurrences in prose/questions). Real academic notes teach mechanisms without copy-pasting full title strings repeatedly.`
+        );
+      }
+    }
+  }
+
+  // 4c. Raw Syllabus Boilerplate Artifacts Detection in Headings or Prose
+  if (/#\s*[^#\n]+(?:[—\-–:]+\s*syllabus|syllabus\s*[:—\-–])/i.test(trimmed)) {
+    issues.push(
+      "Notes header retains raw syllabus boilerplate placeholder markers ('— Syllabus'). Titles must be properly normalized."
+    );
+  }
+
+  // 4d. Obvious Template Leakage & Stray Heading Hashes in Prose
+  // Stray markdown heading hashes inside body prose (e.g., "for # Operating Systems")
+  if (/\b(?:for|in|of|on|about)\s+#+\s+[a-zA-Z]/i.test(trimmed)) {
+    issues.push("Notes contain stray markdown heading hashes ('#') leaked inside sentence prose.");
+  }
+  // Un-interpolated template variables (e.g., "${topic}", "${subject}")
+  if (/\$\{(?:topic|subject|cleanTitle|cleanSub|title)\}/i.test(trimmed)) {
+    issues.push("Notes contain un-interpolated template variable placeholder (e.g. '${topic}').");
+  }
+  // Generic repetitive boilerplate template phrases
+  if (/comprehensive academic principles,\s*core mechanisms,\s*worked examples/i.test(trimmed)) {
+    issues.push("Notes contain generic repeated boilerplate phrase: 'Comprehensive academic principles, core mechanisms, worked examples, and exam problem strategies for...'.");
+  }
+  // Duplicated titles in template phrase: "for <Title> in <Title>"
+  const dupPhraseMatch = trimmed.match(/for\s+([^.\n]+?)\s+in\s+([^.\n]+?)(?:\.|\n|$)/i);
+  if (dupPhraseMatch) {
+    const part1 = dupPhraseMatch[1].trim().toLowerCase().replace(/^#+\s*/, "");
+    const part2 = dupPhraseMatch[2].trim().toLowerCase().replace(/^#+\s*/, "");
+    if (part1 === part2 && part1.length > 2) {
+      issues.push(`Detected duplicated template phrase: 'for ${dupPhraseMatch[1]} in ${dupPhraseMatch[2]}'.`);
+    }
   }
 
   // 5. Structural Pedagogical Sections Check
@@ -237,15 +673,289 @@ export function validateNotesContent(
     if (!hasCodeOrSyntax) {
       issues.push("Computer science notes should contain code examples, syntax breakdown, or algorithmic complexity analysis.");
     }
-    if (subLower.includes("java") || topicLower.includes("java")) {
-      const hasJavaCode = trimmed.includes("```java") || trimmed.includes("class ") || trimmed.includes("system.out.println");
-      if (!hasJavaCode) {
+
+    // Anti-Contamination Check: Reject irrelevant high-school math polynomials & equations in CS / DBMS
+    const isDbmsContext =
+      subLower.includes("dbms") ||
+      subLower.includes("database") ||
+      subLower.includes("sql") ||
+      topicLower.includes("dbms") ||
+      topicLower.includes("database") ||
+      topicLower.includes("sql") ||
+      topicLower.includes("relational") ||
+      topicLower.includes("entity relationship") ||
+      topicLower.includes("normalization") ||
+      topicLower.includes("transaction") ||
+      (Boolean(context.syllabus) && /dbms|database/i.test(context.syllabus || ""));
+
+    const mathContaminants = [
+      "f(x) = 2x + 6",
+      "ax^2 + bx + c",
+      "ax² + bx + c",
+      "b^2 - 4ac",
+      "b² - 4ac",
+      "discriminant",
+      "quadratic equation",
+      "quadratic formula",
+      "back-substitution",
+    ];
+
+    for (const contaminant of mathContaminants) {
+      if (lowerNotes.includes(contaminant.toLowerCase())) {
+        issues.push(
+          `Notes contain inappropriate high-school mathematics contamination '${contaminant}' in Computer Science / DBMS curriculum.`
+        );
+      }
+    }
+
+    if (isDbmsContext) {
+      const hasDbmsTerms =
+        lowerNotes.includes("database") ||
+        lowerNotes.includes("dbms") ||
+        lowerNotes.includes("table") ||
+        lowerNotes.includes("relation") ||
+        lowerNotes.includes("sql") ||
+        lowerNotes.includes("schema") ||
+        lowerNotes.includes("query") ||
+        lowerNotes.includes("acid");
+      if (!hasDbmsTerms) {
+        issues.push("Database Management Systems notes must incorporate foundational database concepts (relations, schemas, SQL, transactions).");
+      }
+
+      // DBMS Concrete Artifacts Check: Must include either runnable SQL or relational schema / comparative table
+      const hasSqlCode = /```sql\s*([\s\S]*?)```/i.test(trimmed);
+      const hasRelationalTable = /\|[\s\S]*?\|[\s\S]*?\n\|[\s:\-]+?\|/i.test(trimmed);
+      if (!hasSqlCode && !hasRelationalTable) {
+        issues.push("Database Management Systems notes must include concrete SQL code examples or structured relational schema tables.");
+      }
+
+      // Check if SQL code block is non-empty and contains valid SQL keywords
+      if (hasSqlCode) {
+        const sqlMatch = trimmed.match(/```sql\s*([\s\S]*?)```/i);
+        const sqlBody = sqlMatch ? sqlMatch[1].trim() : "";
+        const hasValidSqlKeywords = /\b(create table|select|insert into|update|delete|begin|commit|rollback|create index|grant|revoke|alter table)\b/i.test(sqlBody);
+        if (sqlBody.length < 20 || !hasValidSqlKeywords) {
+          issues.push("SQL code example in Database Management Systems notes is empty, placeholder, or lacks valid DDL/DML statements.");
+        }
+      }
+    }
+
+    if (subLower.includes("java") || topicLower.includes("java") || (Boolean(context.syllabus) && /java/i.test(context.syllabus || ""))) {
+      // 1. Code Snippet Syntax & Integrity Validation
+      const javaBlockRegex = /```java\s*([\s\S]*?)```/gi;
+      let match;
+      let javaSnippetCount = 0;
+      while ((match = javaBlockRegex.exec(trimmed)) !== null) {
+        javaSnippetCount++;
+        const snippet = match[1];
+        const res = validateJavaCodeSnippet(snippet);
+        if (!res.valid) {
+          for (const err of res.errors) {
+            issues.push(`Java code defect: ${err}`);
+          }
+        }
+      }
+
+      if (javaSnippetCount === 0 && !lowerNotes.includes("class ") && !lowerNotes.includes("system.out.println")) {
         issues.push("Java notes must include valid, formatted Java code examples.");
       }
-      if (topicLower.includes("class") || topicLower.includes("object")) {
-        const hasCoreOop = lowerNotes.includes("class") && (lowerNotes.includes("object") || lowerNotes.includes("instance"));
+
+      // 2. Topic Alignment: Java Foundations vs. Classes and Objects
+      const isFoundationsTopic =
+        /foundation|syntax|runtime|architecture|jvm|compilation/i.test(topicLower) ||
+        (/foundation|syntax|runtime|architecture|jvm|compilation/i.test(context.syllabus || "") && !/class(es)?\s*(and|&)?\s*object/i.test(topicLower));
+
+      if (isFoundationsTopic) {
+        const coversPrimitives =
+          lowerNotes.includes("primitive") &&
+          (lowerNotes.includes("int") || lowerNotes.includes("byte") || lowerNotes.includes("double") || lowerNotes.includes("boolean"));
+        const coversControlFlow =
+          lowerNotes.includes("control flow") ||
+          lowerNotes.includes("switch") ||
+          lowerNotes.includes("if-else") ||
+          lowerNotes.includes("loop") ||
+          lowerNotes.includes("operator");
+        const coversCompilationAndJvm =
+          (lowerNotes.includes("javac") || lowerNotes.includes("bytecode") || lowerNotes.includes("classloader")) &&
+          lowerNotes.includes("jvm");
+        const coversRuntimeMemory =
+          lowerNotes.includes("stack") && lowerNotes.includes("heap");
+
+        if (!coversPrimitives || !coversControlFlow || !coversCompilationAndJvm || !coversRuntimeMemory) {
+          issues.push(
+            "Java Foundations notes must cover syntax, primitive/reference types, operators, control flow, compilation lifecycle (javac/bytecode/ClassLoader), and JVM runtime memory."
+          );
+        }
+
+        // Prevent topic collapse into solely Classes & Objects
+        const isCollapsedIntoClassesObjects =
+          !coversPrimitives &&
+          !coversCompilationAndJvm &&
+          lowerNotes.includes("blueprint") &&
+          lowerNotes.includes("student");
+        if (isCollapsedIntoClassesObjects) {
+          issues.push(
+            "Topic alignment failure: Broad Java Foundations topic has collapsed into an exclusively Classes & Objects lesson."
+          );
+        }
+      }
+
+      const isClassesObjectsTopic =
+        (/class(es)?\s*(and|&)?\s*object/i.test(topicLower) || /oop/i.test(topicLower)) &&
+        !isFoundationsTopic;
+
+      if (isClassesObjectsTopic) {
+        const hasCoreOop =
+          lowerNotes.includes("class") &&
+          (lowerNotes.includes("object") || lowerNotes.includes("instance")) &&
+          (lowerNotes.includes("constructor") || lowerNotes.includes("encapsulation"));
         if (!hasCoreOop) {
-          issues.push("Java Classes and Objects notes must explain classes and object instantiation.");
+          issues.push(
+            "Java Classes and Objects notes must explain classes as blueprints, object instantiation via 'new', constructors, and encapsulation."
+          );
+        }
+      }
+
+      // 3. Technical Accuracy: JVM Memory Explanations
+      const assertsAllReferencesOnStack =
+        /\b(?:all|every)\s+reference\s+variables?\s+(?:reside|live|are\s+stored|placed)\s+on\s+the\s+(?:thread\s+)?stack\b/i.test(
+          trimmed
+        );
+      const isDebunkingMisconception =
+        /misconception|wrong|fallacy|pitfall|mistake/i.test(trimmed) &&
+        /instance\s+(?:reference\s+)?field/i.test(trimmed) &&
+        /heap/i.test(trimmed);
+
+      if (assertsAllReferencesOnStack && !isDebunkingMisconception) {
+        issues.push(
+          "Technical inaccuracy: Notes claim all reference variables reside on the thread stack. Local references live in stack frames, but instance reference fields reside inside objects on the heap, and static references reside in the Class object on the heap."
+        );
+      }
+
+      // 4. Verification Claims: Do not claim javac verification if javac was not executed or is unavailable
+      const claimsJavacVerification =
+        /compiler-verified\s+by\s+javac|verified\s+by\s+the\s+javac\s+compiler|verified\s+using\s+javac\s+compiler/i.test(
+          trimmed
+        );
+      if (claimsJavacVerification && !isJavacAvailable()) {
+        issues.push(
+          "Notes falsely claim compiler verification with javac when javac was not executed or is unavailable on the host."
+        );
+      }
+    }
+
+    // OS & CPU Scheduling Validation: Code/Output Agreement and Metric Consistency
+    const isOsContext =
+      subLower.includes("operating system") ||
+      subLower === "os" ||
+      topicLower.includes("scheduling") ||
+      topicLower.includes("round robin") ||
+      topicLower.includes("process") ||
+      topicLower.includes("paging");
+
+    if (isOsContext) {
+      // 1. If Round Robin metrics table is present, verify mathematical consistency
+      // Pattern matches lines like: P1	10	23	23	13
+      const rrTableRegex = /P([1-9]\d*)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/g;
+      let match;
+      while ((match = rrTableRegex.exec(trimmed)) !== null) {
+        const pid = match[1];
+        const burst = parseInt(match[2], 10);
+        const completion = parseInt(match[3], 10);
+        const turnaround = parseInt(match[4], 10);
+        const waiting = parseInt(match[5], 10);
+
+        // Turnaround Time must equal Completion Time if arrival is t=0 (as assumed in benchmark)
+        if (turnaround !== completion) {
+          issues.push(
+            `CPU scheduling table error for P${pid}: Turnaround Time (${turnaround}) does not match Completion Time (${completion}) under arrival time t=0.`
+          );
+        }
+        // Waiting Time must equal Turnaround Time - Burst Time
+        if (waiting !== turnaround - burst) {
+          issues.push(
+            `CPU scheduling table error for P${pid}: Waiting Time (${waiting}) must equal Turnaround Time (${turnaround}) minus Burst Time (${burst}) = ${turnaround - burst}.`
+          );
+        }
+      }
+
+      // 2. Specific benchmark verification for P1=10, P2=5, P3=8 (quantum=4):
+      // If code simulates P1=10, P2=5, P3=8 with quantum 4, P2 MUST finish at 17 (never 13)!
+      if (
+        lowerNotes.includes("quantum = 4") ||
+        lowerNotes.includes("quantum=4") ||
+        (trimmed.includes("10") && trimmed.includes("5") && trimmed.includes("8") && lowerNotes.includes("round robin"))
+      ) {
+        // Detect old defective output where P2 had completion 13 or waiting 8
+        if (/P2\s+5\s+13\s+13\s+8/.test(trimmed)) {
+          issues.push(
+            "Code/output mismatch in Round Robin simulation: Process P2 executes 4 units in round 1 and 1 unit at t=16, completing at t=17 (WT=12), not at t=13."
+          );
+        }
+      }
+
+      // 3. EMAT calculation consistency
+      // If notes calculate EMAT with 80% hit ratio, 20 ns TLB, and 100 ns RAM:
+      if (lowerNotes.includes("emat") && lowerNotes.includes("tlb")) {
+        const has80Percent = lowerNotes.includes("80%") || lowerNotes.includes("0.80") || lowerNotes.includes("0.8");
+        const has100Ns = lowerNotes.includes("100") && lowerNotes.includes("ns");
+        const has20Ns = lowerNotes.includes("20") && lowerNotes.includes("ns");
+        if (has80Percent && has100Ns && has20Ns) {
+          // Correct answer is 140 ns. If someone claims 300 ns or 200 ns, flag it
+          const claimsCorrectEmat = /140\s*ns/i.test(trimmed);
+          if (!claimsCorrectEmat && /\b(300|200|260|280|90|80)\s*ns\b/i.test(trimmed)) {
+            issues.push(
+              "Effective Memory Access Time (EMAT) numerical calculation error: For 80% hit ratio with 20 ns TLB and 100 ns RAM, EMAT is 0.80*(120) + 0.20*(220) = 140 ns."
+            );
+          }
+        }
+      }
+
+      // 4. Page Replacement Algorithms & Belady's Anomaly numerical accuracy
+      const hasPageReplacement =
+        lowerNotes.includes("page replacement") ||
+        (lowerNotes.includes("fifo") && lowerNotes.includes("lru") && lowerNotes.includes("optimal"));
+      if (hasPageReplacement) {
+        const mentionsSampleRefs =
+          lowerNotes.includes("7, 0, 1, 2, 0, 3, 0, 4, 2, 3") ||
+          lowerNotes.includes("7,0,1,2,0,3,0,4,2,3");
+        if (mentionsSampleRefs) {
+          // FIFO with 3 frames must have 9 faults (reject old erroneous 8 faults)
+          if (/\bfifo\b[^|\n]*\|\s*(?:evicts[^\n|]*\|\s*)?\*{0,2}8\s*faults?\*{0,2}/i.test(trimmed)) {
+            issues.push(
+              "Page replacement numerical error: For reference string '7, 0, 1, 2, 0, 3, 0, 4, 2, 3' with 3 frames, FIFO produces exactly 9 page faults, not 8."
+            );
+          }
+          // LRU with 3 frames must have 8 faults (reject old erroneous 7 faults)
+          if (/\blru\b[^|\n]*\|\s*(?:evicts[^\n|]*\|\s*)?\*{0,2}7\s*faults?\*{0,2}/i.test(trimmed)) {
+            issues.push(
+              "Page replacement numerical error: For reference string '7, 0, 1, 2, 0, 3, 0, 4, 2, 3' with 3 frames, LRU produces exactly 8 page faults, not 7."
+            );
+          }
+          // Optimal with 3 frames must have 6 faults (reject old erroneous 5 faults)
+          if (/\boptimal\b[^|\n]*\|\s*(?:evicts[^\n|]*\|\s*)?\*{0,2}5\s*faults?\*{0,2}/i.test(trimmed)) {
+            issues.push(
+              "Page replacement numerical error: For reference string '7, 0, 1, 2, 0, 3, 0, 4, 2, 3' with 3 frames, Optimal produces exactly 6 page faults, not 5."
+            );
+          }
+        }
+
+        // Belady's Anomaly reference string check
+        const mentionsBeladyString =
+          lowerNotes.includes("1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5") ||
+          lowerNotes.includes("1,2,3,4,1,2,5,1,2,3,4,5");
+        if (mentionsBeladyString && lowerNotes.includes("belady")) {
+          const has9Faults3Frames =
+            /9\s*(?:page\s*)?faults?\s*(?:with\s*)?3\s*frames/i.test(trimmed) ||
+            /3\s*(?:physical\s*)?frames[^.\n]*9\s*(?:page\s*)?faults?/i.test(trimmed);
+          const has10Faults4Frames =
+            /10\s*(?:page\s*)?faults?\s*(?:with\s*)?4\s*frames/i.test(trimmed) ||
+            /4\s*(?:physical\s*)?frames[^.\n]*10\s*(?:page\s*)?faults?/i.test(trimmed);
+          if (!has9Faults3Frames || !has10Faults4Frames) {
+            issues.push(
+              "Belady's Anomaly explanation error: Reference string '1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5' under FIFO must demonstrate 9 faults with 3 frames and 10 faults with 4 frames."
+            );
+          }
         }
       }
     }
@@ -270,7 +980,8 @@ export function validateNotesContent(
   // Calculate quality score
   const deductions = issues.length * 15;
   const score = Math.max(0, Math.min(100, 100 - deductions));
-  const valid = issues.length === 0 || (issues.length <= 1 && score >= 70);
+  const hasContamination = issues.some((iss) => iss.includes("contamination"));
+  const valid = !hasContamination && (issues.length === 0 || (issues.length <= 1 && score >= 70));
 
   return { valid, score, issues };
 }
@@ -867,6 +1578,492 @@ export function buildSubjectAwareFallbackQuestions(
 
   // 7. Computer Science & Software
   if (domain === "computer_science") {
+    const isDbms =
+      /dbms|database|sql/i.test(subject) ||
+      /dbms|database|sql|entity relationship|er model|er diagram|normalization|relational|transactions|concurrency|acid|recovery/i.test(
+        titleLower
+      );
+
+    if (isDbms) {
+      const isUnit1 =
+        /intro|introduction to dbms|dbms architecture|file system/i.test(titleLower) ||
+        /unit\s*1/i.test(titleLower);
+      const isUnit2 =
+        /entity relationship|er model|er diagram|cardinality|weak entity/i.test(titleLower) ||
+        /unit\s*2/i.test(titleLower);
+      const isUnit3 =
+        /relational model|sql|relational algebra|ddl|dml|join|group by/i.test(titleLower) ||
+        /unit\s*3/i.test(titleLower);
+      const isUnit4 =
+        /normalization|normal form|functional dependenc|1nf|2nf|3nf|bcnf|lossless/i.test(titleLower) ||
+        /unit\s*4/i.test(titleLower);
+      const isUnit5 =
+        /transaction|concurrency|recovery|acid|serializ|2pl|lock|deadlock|wal/i.test(titleLower) ||
+        /unit\s*5/i.test(titleLower);
+
+      if (isUnit1) {
+        return [
+          {
+            text: "Which of the following is a primary architectural advantage of a Database Management System (DBMS) over a conventional File Processing System?",
+            options: [
+              "DBMS completely eliminates the need for secondary storage devices.",
+              "DBMS enforces centralized data independence, eliminating structural data redundancy and inconsistency.",
+              "DBMS prevents multiple users from accessing the system concurrently under all circumstances.",
+              "DBMS replaces declarative queries with low-level manual assembly code routines.",
+            ],
+            correctOption: 1,
+            explanation:
+              "A DBMS provides physical and logical data independence, centralized catalog management, and transactional consistency, overcoming the high data redundancy, manual synchronization, and structural dependency inherent in traditional file processing systems.",
+          },
+          {
+            text: "In the ANSI-SPARC Three-Schema Database Architecture, which schema level describes the physical storage structures, access paths, and internal record organization?",
+            options: [
+              "External Schema (User Views)",
+              "Conceptual Schema (Logical Model)",
+              "Internal Schema (Physical Schema)",
+              "Application Interface Layer",
+            ],
+            correctOption: 2,
+            explanation:
+              "The Internal (Physical) Schema defines how data is physically stored on disk, including page layouts, B-tree indexes, file organization, and compression formats.",
+          },
+          {
+            text: "What does Logical Data Independence ensure in a multi-tier database management system?",
+            options: [
+              "The ability to modify the conceptual schema without having to rewrite existing external views or user application programs.",
+              "The ability to reformat hard disks without powering down the database server.",
+              "The guarantee that all SQL queries run in constant O(1) time.",
+              "The requirement that foreign keys must be declared with CASCADE delete rules.",
+            ],
+            correctOption: 0,
+            explanation:
+              "Logical data independence is the capacity to change the conceptual schema (e.g. adding non-destructive tables or attributes) without altering external schemas or breaking existing client applications.",
+          },
+          {
+            text: "Which database system component is primarily responsible for holding system catalog information, schema definitions, constraints, and user authorizations?",
+            options: [
+              "Write-Ahead Log (WAL) buffer pool",
+              "Operating System Page Table",
+              "Client Presentation Component",
+              "Data Dictionary / System Catalog",
+            ],
+            correctOption: 3,
+            explanation:
+              "The Data Dictionary (System Catalog) is the internal metadata repository storing schemas, relationship structures, constraints, access privileges, and physical index statistics.",
+          },
+          {
+            text: "Who has primary administrative responsibility for defining schemas, managing user security permissions, and overseeing backup and disaster recovery?",
+            options: [
+              "Sophisticated End User",
+              "Database Administrator (DBA)",
+              "Naive / Parametric End User",
+              "Hardware Firmware Engineer",
+            ],
+            correctOption: 1,
+            explanation:
+              "The Database Administrator (DBA) is authorized to configure schema structures, tune performance, manage access permissions, and ensure continuous disaster recovery and backups.",
+          },
+        ];
+      }
+
+      if (isUnit2) {
+        return [
+          {
+            text: "In Entity-Relationship (ER) modeling, how is an Entity Set formally distinguished from an Attribute?",
+            options: [
+              "An entity set is a collection of distinguishable real-world objects sharing identical attributes, while an attribute is a descriptive property of an entity.",
+              "An entity set must always be a numeric foreign key, while attributes are stored as binary blobs.",
+              "An attribute contains multiple relational tables, whereas an entity set cannot store data.",
+              "There is no difference; entity sets and attributes are interchangeable aliases in Chen notation.",
+            ],
+            correctOption: 0,
+            explanation:
+              "An entity is a real-world object distinguishable from other objects (e.g., a specific student), an entity set is a set of entities sharing the same properties, and attributes describe those properties.",
+          },
+          {
+            text: "How is a Weak Entity Set represented in standard Chen ER diagram notation?",
+            options: [
+              "A dashed oval with a double border",
+              "A diamond inside an equilateral triangle",
+              "A double rectangle (entity) identified through a double diamond (identifying relationship)",
+              "A single rectangle with bold italic text",
+            ],
+            correctOption: 2,
+            explanation:
+              "A weak entity set lacks a primary key of its own and depends on an owner entity set; in Chen notation, it is represented by a double rectangle linked by a double diamond identifying relationship.",
+          },
+          {
+            text: "What is the key defining characteristic of a Candidate Key in relational modeling?",
+            options: [
+              "It must permit NULL values across at least 50% of the tuples.",
+              "It is a minimal superkey capable of uniquely identifying every tuple in a relation without redundant attributes.",
+              "It can only be formed by concatenating every single column in the relation.",
+              "It is created automatically by database backup utilities.",
+            ],
+            correctOption: 1,
+            explanation:
+              "A candidate key is a minimal superkey: it satisfies both uniqueness (no two distinct tuples have identical values) and irreducibility (no proper subset satisfies uniqueness).",
+          },
+          {
+            text: "When mapping a Many-to-Many (M:N) relationship between two entity sets (e.g. Students and Courses) into relational tables, what schema structure is required?",
+            options: [
+              "Adding an array column to the Students table containing all enrolled course codes.",
+              "Embedding the entire Courses table inside the primary key of Students.",
+              "Merging both entities into a single universal table with no foreign keys.",
+              "Creating a separate associative (junction) table containing the foreign keys of both participating entities as a composite key.",
+            ],
+            correctOption: 3,
+            explanation:
+              "An M:N relationship cannot be represented as a simple foreign key in either parent table without causing multi-valued repeating groups. It requires a junction table with foreign keys referencing both tables.",
+          },
+          {
+            text: "In an ER diagram, if every entity in entity set E must participate in at least one relationship instance of R, what constraint is present?",
+            options: [
+              "Total Participation (represented by a double line connecting E to R)",
+              "Partial Participation (represented by a dashed line)",
+              "Disjoint Generalization without specialization",
+              "Ternary Aggregation constraint",
+            ],
+            correctOption: 0,
+            explanation:
+              "Total participation (existence dependency) dictates that every entity in the entity set participates in the relationship, designated in ER diagrams by a double line.",
+          },
+        ];
+      }
+
+      if (isUnit3) {
+        return [
+          {
+            text: "In relational algebra, which operator performs horizontal filtering of tuples that satisfy a specified predicate?",
+            options: [
+              "Projection (π)",
+              "Cartesian Product (×)",
+              "Selection (σ)",
+              "Natural Join (⋈)",
+            ],
+            correctOption: 2,
+            explanation:
+              "The Selection operator (σ_predicate) selects tuples that satisfy a Boolean condition, operating horizontally on the relation.",
+          },
+          {
+            text: "What is the crucial operational distinction between the WHERE clause and the HAVING clause in SQL?",
+            options: [
+              "WHERE filters grouped and aggregated rows after GROUP BY; HAVING filters individual rows before grouping.",
+              "WHERE filters individual rows before grouping occurs; HAVING filters aggregated groups formed by GROUP BY.",
+              "WHERE only works with numerical columns; HAVING works strictly with strings.",
+              "WHERE is part of DDL syntax; HAVING is part of DCL syntax.",
+            ],
+            correctOption: 1,
+            explanation:
+              "The WHERE clause filters individual rows before aggregation occurs, whereas the HAVING clause filters summary groups produced by GROUP BY based on aggregate expressions (e.g., HAVING COUNT(*) > 5).",
+          },
+          {
+            text: "What does the Referential Integrity Constraint guarantee in a relational database?",
+            options: [
+              "That every table must have at least 1,000 tuples.",
+              "That all string columns must be stored in Unicode UTF-8 format.",
+              "That no transaction can ever be aborted once begun.",
+              "That any foreign key value in a referencing table must match an existing primary key value in the referenced table, or be NULL.",
+            ],
+            correctOption: 3,
+            explanation:
+              "Referential integrity guarantees that foreign key references are valid; a foreign key value must correspond to a primary key in the referenced parent relation, or evaluate to NULL.",
+          },
+          {
+            text: "Which SQL JOIN returns all rows from the left table and the matched rows from the right table, filling unmatched right attributes with NULL?",
+            options: [
+              "LEFT OUTER JOIN",
+              "INNER JOIN",
+              "CROSS JOIN",
+              "FULL OUTER JOIN",
+            ],
+            correctOption: 0,
+            explanation:
+              "A LEFT OUTER JOIN preserves every row from the left relation. When no matching record exists in the right relation, NULL values are populated for all right-relation columns.",
+          },
+          {
+            text: "How does the aggregate function COUNT(*) differ from COUNT(column_name) in SQL?",
+            options: [
+              "COUNT(*) counts only distinct values, while COUNT(column_name) counts all rows including duplicates.",
+              "COUNT(*) counts every row in the result set including NULLs, while COUNT(column_name) counts only rows where the specified column is non-NULL.",
+              "COUNT(*) throws a runtime exception if the table contains foreign keys.",
+              "COUNT(*) is deprecated in ANSI SQL standards.",
+            ],
+            correctOption: 1,
+            explanation:
+              "COUNT(*) counts total tuples regardless of column content, whereas COUNT(column_name) ignores tuples where column_name evaluates to NULL.",
+          },
+        ];
+      }
+
+      if (isUnit4) {
+        return [
+          {
+            text: "Which database design flaw occurs when deleting an independent master entity unintentionally purges unrelated historical records?",
+            options: [
+              "Insertion Anomaly",
+              "Deletion Anomaly",
+              "Deadlock Cascade",
+              "Phantom Read Anomaly",
+            ],
+            correctOption: 1,
+            explanation:
+              "A deletion anomaly occurs when the removal of data about one real-world entity unintentionally destroys data about an entirely distinct entity due to poor schema decomposition.",
+          },
+          {
+            text: "Under Armstrong's Axioms for functional dependencies, which inference rule states that if X → Y holds, then XZ → YZ holds for any attribute set Z?",
+            options: [
+              "Augmentation Rule",
+              "Transitivity Rule",
+              "Reflexivity Rule",
+              "Decomposition Rule",
+            ],
+            correctOption: 0,
+            explanation:
+              "The Augmentation rule asserts that if X → Y, adding any attribute set Z to both sides yields XZ → YZ.",
+          },
+          {
+            text: "What requirement must a relational table satisfy to achieve Second Normal Form (2NF)?",
+            options: [
+              "It must be in 3NF and contain no candidate keys.",
+              "Every functional dependency must be trivial.",
+              "It must contain no multi-valued dependencies.",
+              "It must be in 1NF and have no partial functional dependencies (every non-prime attribute must depend on the whole candidate key).",
+            ],
+            correctOption: 3,
+            explanation:
+              "2NF requires 1NF compliance plus the complete absence of partial functional dependencies; every non-prime attribute must be fully functionally dependent on every candidate key.",
+          },
+          {
+            text: "How does Third Normal Form (3NF) differ from Boyce-Codd Normal Form (BCNF)?",
+            options: [
+              "3NF applies to NoSQL document stores, while BCNF applies to SQL databases.",
+              "3NF prohibits transitive dependencies, whereas BCNF allows arbitrary transitive dependencies.",
+              "In 3NF, for X → Y, Y can be a prime attribute even if X is not a superkey; BCNF strictly requires X to be a superkey for every non-trivial dependency.",
+              "3NF requires every column to be an integer primary key.",
+            ],
+            correctOption: 2,
+            explanation:
+              "3NF allows X → Y if X is a superkey OR Y is a prime attribute. BCNF eliminates this second condition, mandating that for every non-trivial dependency X → Y, X must strictly be a superkey.",
+          },
+          {
+            text: "Why is a Lossless-Join Decomposition considered an essential property when decomposing a schema into normal forms?",
+            options: [
+              "It reduces the size of the database on disk by exactly 50%.",
+              "It guarantees that joining the decomposed tables via natural join reconstructs the exact original relation without creating spurious (false) tuples.",
+              "It removes the need for primary keys across all sub-tables.",
+              "It converts relational tables into JSON documents.",
+            ],
+            correctOption: 1,
+            explanation:
+              "A lossless-join decomposition ensures that when sub-relations are rejoined via natural join, exactly the original relation is recovered without spurious tuples.",
+          },
+        ];
+      }
+
+      if (isUnit5) {
+        return [
+          {
+            text: "Which ACID property guarantees that all database modifications within a transaction are completed successfully, or the database is rolled back to its pre-transaction state if a failure occurs?",
+            options: [
+              "Consistency",
+              "Durability",
+              "Isolation",
+              "Atomicity",
+            ],
+            correctOption: 3,
+            explanation:
+              "Atomicity ('all-or-nothing') guarantees that either all operations of the transaction are reflected in the database, or none are.",
+          },
+          {
+            text: "How does a DBMS verify whether an interleaved concurrent schedule of transactions is Conflict Serializable?",
+            options: [
+              "By verifying that all transactions execute on the same CPU core.",
+              "By constructing a Precedence (Serialization) Graph and verifying that it contains no directed cycles.",
+              "By executing transactions sequentially in alphabetical order of transaction IDs.",
+              "By ensuring that no transaction reads any data written in the past 24 hours.",
+            ],
+            correctOption: 1,
+            explanation:
+              "A schedule is conflict serializable if and only if its precedence graph contains no directed cycles (it is a Directed Acyclic Graph, DAG).",
+          },
+          {
+            text: "What concurrency anomaly is defined as Transaction T1 reading uncommitted data written by Transaction T2, where T2 subsequently executes a ROLLBACK?",
+            options: [
+              "Dirty Read (Temporary Update Anomaly)",
+              "Non-Repeatable Read",
+              "Phantom Read Anomaly",
+              "Lost Update Anomaly",
+            ],
+            correctOption: 0,
+            explanation:
+              "A Dirty Read occurs when a transaction reads uncommitted modifications made by another concurrent transaction that later fails or rolls back.",
+          },
+          {
+            text: "What does the Two-Phase Locking (2PL) protocol guarantee regarding concurrent transaction schedules?",
+            options: [
+              "It guarantees freedom from deadlocks without requiring timeouts.",
+              "It guarantees that all queries execute in O(1) lock time.",
+              "It guarantees conflict serializability, but does NOT prevent deadlocks.",
+              "It ensures that no exclusive locks are ever acquired.",
+            ],
+            correctOption: 2,
+            explanation:
+              "The Two-Phase Locking (2PL) protocol guarantees conflict serializability, but transactions adhering to 2PL may still encounter deadlocks.",
+          },
+          {
+            text: "Under the Write-Ahead Logging (WAL) protocol, when must log records describing transaction modifications be flushed to non-volatile disk storage?",
+            options: [
+              "Only when the operating system shuts down cleanly.",
+              "Once every 24 hours during nightly maintenance.",
+              "After the modified database pages have already been written to the physical database files.",
+              "Before the corresponding dirty database page is written to disk, and before the transaction's COMMIT completes.",
+            ],
+            correctOption: 3,
+            explanation:
+              "WAL protocol dictates that log records must be written to stable non-volatile storage before the corresponding dirty database page overwrites disk, and before transaction commit is acknowledged.",
+          },
+        ];
+      }
+
+      // General DBMS fallback
+      return [
+        {
+          text: "In relational database design, what is the primary role of a Foreign Key?",
+          options: [
+            "To establish and enforce a referential link between data in two tables by referencing the primary key of another table.",
+            "To encrypt sensitive passwords before storing them on disk.",
+            "To speed up arithmetic calculations on numeric columns.",
+            "To allow tables to exist without primary keys.",
+          ],
+          correctOption: 0,
+          explanation:
+            "A foreign key matches the primary key of a parent table to enforce referential integrity and establish relational connections.",
+        },
+        {
+          text: "Which SQL statement is used to remove an existing table and all of its structure, definitions, and rows from a database permanently?",
+          options: [
+            "DELETE TABLE table_name;",
+            "TRUNCATE table_name;",
+            "DROP TABLE table_name;",
+            "REMOVE TABLE table_name;",
+          ],
+          correctOption: 2,
+          explanation:
+            "DROP TABLE is a DDL command that destroys the table schema, catalog metadata, indexes, and all stored rows permanently.",
+        },
+        {
+          text: "What is the primary benefit of creating an index (such as a B+ tree index) on a relational table column?",
+          options: [
+            "It eliminates the need for foreign key constraints.",
+            "It significantly accelerates data retrieval (SELECT queries) by avoiding full table scans, with a slight write overhead for INSERT/UPDATE.",
+            "It automatically normalizes the relation into Boyce-Codd Normal Form.",
+            "It compresses the entire database into a single file.",
+          ],
+          correctOption: 1,
+          explanation:
+            "Indexes provide balanced tree or hash lookups that speed up search and join predicates from O(N) to O(log N), at the cost of disk space and index update overhead.",
+        },
+        {
+          text: "Which ACID property guarantees that once a transaction commits, its changes survive system crashes and power failures?",
+          options: [
+            "Atomicity",
+            "Consistency",
+            "Isolation",
+            "Durability",
+          ],
+          correctOption: 3,
+          explanation:
+            "Durability guarantees that committed modifications are permanently preserved in non-volatile storage (via disk logs and checkpointing) even if the system crashes immediately afterward.",
+        },
+        {
+          text: "What is the result of evaluating a comparison expression like 'salary > 50000' in SQL when 'salary' is NULL?",
+          options: [
+            "TRUE",
+            "FALSE",
+            "UNKNOWN (Three-Valued Logic)",
+            "Compile Error",
+          ],
+          correctOption: 2,
+          explanation:
+            "SQL uses Three-Valued Logic (TRUE, FALSE, UNKNOWN). Any comparison involving a NULL operand evaluates to UNKNOWN.",
+        },
+      ];
+    }
+
+    if (
+      (subLower.includes("java") || titleLower.includes("java")) &&
+      (titleLower.includes("foundation") ||
+        titleLower.includes("syntax") ||
+        titleLower.includes("runtime") ||
+        titleLower.includes("architecture") ||
+        titleLower.includes("jvm") ||
+        titleLower.includes("compilation"))
+    ) {
+      return [
+        {
+          text: "What is the primary role of the Java compiler (javac) in the Java compilation and execution lifecycle?",
+          options: [
+            "It translates Java source code directly into hardware-specific binary machine code.",
+            "It compiles human-readable .java source code into platform-independent intermediate bytecode stored in .class files.",
+            "It acts as a garbage collector to reclaim unused heap memory.",
+            "It executes SQL database queries asynchronously.",
+          ],
+          correctOption: 1,
+          explanation:
+            "javac compiles high-level Java source files into architecture-neutral bytecode (.class files), which the JVM then interprets or JIT-compiles into native instructions at runtime.",
+        },
+        {
+          text: "Where do object reference variables that are declared as instance fields of a class reside in the JVM runtime memory model?",
+          options: [
+            "Always on the thread stack inside the local variable array.",
+            "In CPU instruction cache registers only.",
+            "Inside the object's payload allocated on the Garbage-Collected Heap.",
+            "Permanently in the non-volatile operating system page file.",
+          ],
+          correctOption: 2,
+          explanation:
+            "While local reference variables declared inside method frames live in the thread stack's local variable array, instance reference fields are physically stored on the Heap inside the parent object's memory payload.",
+        },
+        {
+          text: "How does Java handle method parameter passing (pass-by-value semantics) for primitive types versus object references?",
+          options: [
+            "Java is strictly pass-by-value for all types; with object references, the value passed is a copy of the memory address pointing to the heap object.",
+            "Primitives are passed by value, but objects are passed strictly by reference.",
+            "Both primitives and objects are passed strictly by reference.",
+            "Methods can dynamically choose passing mechanisms at runtime using annotations.",
+          ],
+          correctOption: 0,
+          explanation:
+            "Java is exclusively pass-by-value. For reference types, the parameter receives a copy of the reference address. Mutating the object payload affects the shared heap object, but reassigning the parameter reference has zero effect on the caller.",
+        },
+        {
+          text: "What is the structural distinction between the JDK, JRE, and JVM?",
+          options: [
+            "The JVM contains the JDK, while the JRE is only used on mobile devices.",
+            "The JRE contains the javac compiler, while the JDK only contains execution libraries.",
+            "The JDK contains development tools (like javac) and the JRE; the JRE contains core class libraries and the JVM; the JVM executes bytecode.",
+            "There is no distinction; they are identical tools with different version names.",
+          ],
+          correctOption: 2,
+          explanation:
+            "The JDK provides the development environment (compiler, debugger, tools) and bundles the JRE; the JRE provides the standard class libraries and bundles the JVM; the JVM executes bytecode.",
+        },
+        {
+          text: "Which phase of the JVM ClassLoader subsystem is responsible for verifying that bytecode conforms to JVM safety constraints and does not cause stack overflows or illegal type casts?",
+          options: [
+            "The Linking: Verification phase.",
+            "The Garbage Collection sweep phase.",
+            "The Metaspace compilation phase.",
+            "The JNI native binding phase.",
+          ],
+          correctOption: 0,
+          explanation:
+            "The Verification stage of the Linking phase inspects loaded bytecode to ensure it obeys JVM constraints, preventing operand stack overflows, illegal casts, and memory corruption before code execution begins.",
+        },
+      ];
+    }
+
     if (titleLower.includes("class") || titleLower.includes("object") || titleLower.includes("oop")) {
       return [
         {
@@ -945,48 +2142,48 @@ export function buildSubjectAwareFallbackQuestions(
     {
       text: `Which of the following is considered an essential academic best practice when analyzing ${topicTitle}?`,
       options: [
-        "Verifying underlying assumptions, evaluating empirical evidence, and testing boundary conditions.",
         "Relying entirely on intuition without consulting primary source evidence or analytical derivations.",
+        "Verifying underlying assumptions, evaluating empirical evidence, and testing boundary conditions.",
         "Ignoring exceptions and anomalies that contradict an initial hypothesis.",
         "Accepting conclusions without checking intermediate steps or logical consistency.",
       ],
-      correctOption: 0,
+      correctOption: 1,
       explanation:
         "Rigorous academic analysis requires explicit verification of foundational assumptions, systematic evaluation of evidence, and testing for boundary conditions.",
     },
     {
       text: `What primary analytical error occurs when studying complex processes in ${topicTitle}?`,
       options: [
-        "Confusing correlation with causation, or oversimplifying multi-faceted phenomena into single causes.",
         "Structuring findings into organized comparative tables.",
         "Documenting references and empirical sources carefully.",
+        "Confusing correlation with causation, or oversimplifying multi-faceted phenomena into single causes.",
         "Verifying calculations using standard units.",
       ],
-      correctOption: 0,
+      correctOption: 2,
       explanation:
         "A common pitfall is the monocausal fallacy or assuming that because two variables correlate, one must directly cause the other without investigating underlying mechanisms.",
     },
     {
       text: `How does comparative analysis strengthen understanding of ${topicTitle} in ${subject}?`,
       options: [
-        "By highlighting structural similarities and fundamental distinctions between related concepts, models, or cases.",
         "By proving that all theories within ${subject} are identical.",
         "By eliminating the need for empirical observation and definitions.",
         "By replacing qualitative understanding with arbitrary numerical indices.",
+        "By highlighting structural similarities and fundamental distinctions between related concepts, models, or cases.",
       ],
-      correctOption: 0,
+      correctOption: 3,
       explanation:
         "Comparative analysis clarifies domain boundaries, highlights contrasting mechanisms, and prevents confusing closely related principles.",
     },
     {
       text: `When preparing for an academic examination on ${topicTitle}, what is the most effective revision strategy?`,
       options: [
-        "Synthesizing key definitions, working through representative problem exercises, and reviewing common misconceptions.",
         "Memorizing isolated keywords without understanding their underlying mechanisms.",
+        "Synthesizing key definitions, working through representative problem exercises, and reviewing common misconceptions.",
         "Skipping foundational prerequisites to focus only on superficial summaries.",
         "Assuming that test questions will never test edge cases or practical application.",
       ],
-      correctOption: 0,
+      correctOption: 1,
       explanation:
         "High-yield revision combines active problem-solving with conceptual mastery of definitions, mechanisms, and common diagnostic errors.",
     },
