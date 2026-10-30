@@ -101,7 +101,7 @@ export function NotesDoubtSolver({
 
     try {
       // Send bounded conversation history (most recent turns)
-      const historyPayload = messages.slice(-4).map((m) => ({
+      const historyPayload = messages.slice(-6).map((m) => ({
         role: m.role,
         content: m.content,
       }));

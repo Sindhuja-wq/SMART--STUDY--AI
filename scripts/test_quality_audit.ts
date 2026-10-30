@@ -2868,6 +2868,167 @@ runTest("88. Quiz Mastery & Progression: 80% Threshold Triggers Sequential Topic
 });
 
 // =====================================================================
+// SUITE 13: AI NOTES TUTOR DIALOGUE & PEDAGOGICAL ACCURACY
+// =====================================================================
+console.log("\n--- SUITE 13: AI NOTES TUTOR DIALOGUE & PEDAGOGICAL ACCURACY ---");
+
+const dbmsSampleNotes = `# Database Management Systems
+### 1. Formal Academic Definition & Core Principles
+A Database Management System (DBMS) is software that manages, stores, and retrieves digital data.
+### 2. Architectural Blueprint
+Three-schema architecture: physical, conceptual, external levels.
+### 3. Worked Example
+university_departments and university_instructors complex schema.`;
+
+// Test 89: AI Notes Tutor: Direct Answer to "What is DBMS?"
+runTest("89. AI Notes Tutor: Direct Answer to 'What is DBMS?'", () => {
+  const res = buildOfflineAcademicDoubtAnswer({
+    subject: "DBMS",
+    topicTitle: "Introduction to DBMS",
+    notes: dbmsSampleNotes,
+    question: "What is DBMS?",
+  });
+
+  assert.strictEqual(res.provider, "academic-fallback");
+  assert(res.answer.includes("Database Management System"), "Must define Database Management System");
+  assert(res.answer.includes("College Student Management System"), "Must include familiar real-life student system");
+  assert(res.answer.includes("CREATE TABLE Students"), "Must include simple beginner student table SQL");
+  assert(!res.answer.includes("Your question touches on concepts"), "Must NOT return generic evasion template");
+  assert(!res.answer.includes("Review the specific headings in the notes above"), "Must NOT tell student to review notes instead of answering");
+});
+
+// Test 90: AI Notes Tutor: Real-Life Example Request
+runTest("90. AI Notes Tutor: Real-Life Example Request", () => {
+  const res = buildOfflineAcademicDoubtAnswer({
+    subject: "DBMS",
+    topicTitle: "Introduction to DBMS",
+    notes: dbmsSampleNotes,
+    question: "Give me a simple real-life example.",
+  });
+
+  assert(res.answer.includes("College Student Management System"), "Must provide student management real-life example");
+  assert(res.answer.includes("CREATE TABLE Students"), "Must demonstrate with simple student table");
+  assert(res.answer.includes("Arun"), "Must show Arun enrollment scenario");
+  assert(!res.answer.includes("university_instructors"), "Must avoid complex production schema dump when simple example requested");
+});
+
+// Test 91: AI Notes Tutor: Simple English Mode
+runTest("91. AI Notes Tutor: Simple English Mode", () => {
+  const res = buildOfflineAcademicDoubtAnswer({
+    subject: "DBMS",
+    topicTitle: "Introduction to DBMS",
+    notes: dbmsSampleNotes,
+    question: "Explain this in simple English.",
+  });
+
+  assert(res.answer.includes("Simplified Explanation"), "Must include simplified explanation header");
+  assert(res.answer.includes("College Student Management System") || res.answer.includes("Students"), "Must use everyday analogy");
+  assert(res.answer.includes("Plain English Breakdown"), "Must include plain English breakdown");
+});
+
+// Test 92: AI Notes Tutor: Practical Example with Beginner SQL
+runTest("92. AI Notes Tutor: Practical Example with Beginner SQL", () => {
+  const res = buildOfflineAcademicDoubtAnswer({
+    subject: "DBMS",
+    topicTitle: "Introduction to DBMS",
+    notes: dbmsSampleNotes,
+    question: "Give me a practical example.",
+  });
+
+  assert(res.answer.includes("Practical Example"), "Must include practical example header");
+  assert(res.answer.includes("CREATE TABLE Students"), "Must include CREATE TABLE Students");
+  assert(res.answer.includes("INSERT INTO Students"), "Must include INSERT INTO Students");
+  assert(res.answer.includes("SELECT * FROM Students"), "Must include SELECT * FROM Students");
+  assert(res.answer.includes("Plain English Explanation"), "Must explain each SQL command in plain English");
+});
+
+// Test 93: AI Notes Tutor: "What is SQL?" & "What are all SQL commands?"
+runTest("93. AI Notes Tutor: 'What is SQL?' & 'What are all SQL commands?'", () => {
+  const res = buildOfflineAcademicDoubtAnswer({
+    subject: "DBMS",
+    topicTitle: "DBMS Foundations",
+    notes: dbmsSampleNotes,
+    question: "What is dbms what are all sql commands ??",
+  });
+
+  assert(res.answer.includes("DDL") && res.answer.includes("Data Definition Language"), "Must categorize DDL");
+  assert(res.answer.includes("DML") && res.answer.includes("Data Manipulation Language"), "Must categorize DML");
+  assert(res.answer.includes("DQL") && res.answer.includes("Data Query Language"), "Must categorize DQL");
+  assert(res.answer.includes("DCL") && res.answer.includes("Data Control Language"), "Must categorize DCL");
+  assert(res.answer.includes("TCL") && res.answer.includes("Transaction Control Language"), "Must categorize TCL");
+  assert(res.answer.includes("CREATE TABLE Students"), "Must include beginner student SQL demo");
+});
+
+// Test 94: AI Notes Tutor: Follow-Up Contextual Dialogue
+runTest("94. AI Notes Tutor: Follow-Up Contextual Dialogue", () => {
+  // Turn 1
+  const turn1 = buildOfflineAcademicDoubtAnswer({
+    subject: "DBMS",
+    topicTitle: "DBMS Foundations",
+    notes: dbmsSampleNotes,
+    question: "What is DBMS?",
+  });
+
+  // Turn 2: Follow-up referring to DBMS
+  const turn2 = buildOfflineAcademicDoubtAnswer({
+    subject: "DBMS",
+    topicTitle: "DBMS Foundations",
+    notes: dbmsSampleNotes,
+    question: "Give me a real-life example",
+    conversationHistory: [
+      { role: "user", content: "What is DBMS?" },
+      { role: "assistant", content: turn1.answer },
+    ],
+  });
+  assert(turn2.answer.includes("College Student Management System"), "Turn 2 must understand follow-up refers to DBMS");
+
+  // Turn 3: Follow-up asking about SQL
+  const turn3 = buildOfflineAcademicDoubtAnswer({
+    subject: "DBMS",
+    topicTitle: "DBMS Foundations",
+    notes: dbmsSampleNotes,
+    question: "How does SQL work?",
+    conversationHistory: [
+      { role: "user", content: "What is DBMS?" },
+      { role: "assistant", content: turn1.answer },
+      { role: "user", content: "Give me a real-life example" },
+      { role: "assistant", content: turn2.answer },
+    ],
+  });
+  assert(turn3.answer.includes("SQL"), "Turn 3 must understand SQL in DBMS context");
+  assert(turn3.answer.includes("Students"), "Turn 3 must reference student table operations");
+});
+
+// Test 95: AI Notes Tutor: Avoids Unnecessary Complexity for Beginners
+runTest("95. AI Notes Tutor: Avoids Unnecessary Complexity for Beginners", () => {
+  const res = buildOfflineAcademicDoubtAnswer({
+    subject: "DBMS",
+    topicTitle: "Introduction to DBMS",
+    notes: dbmsSampleNotes,
+    question: "Explain like a beginner with simple examples.",
+  });
+
+  assert(!res.answer.includes("university_instructors"), "Must avoid production schemas with complex instructors");
+  assert(!res.answer.includes("FOREIGN KEY (department_id) REFERENCES"), "Must avoid complex unrequested foreign keys");
+  assert(res.answer.includes("Students"), "Must use clean 3-column student table");
+});
+
+// Test 96: AI Notes Tutor: Unrelated Discipline Detection & Polite Redirection
+runTest("96. AI Notes Tutor: Unrelated Discipline Detection & Polite Redirection", () => {
+  const res = buildOfflineAcademicDoubtAnswer({
+    subject: "DBMS",
+    topicTitle: "Introduction to DBMS",
+    notes: dbmsSampleNotes,
+    question: "How do you calculate the determinant of a 3x3 matrix in Linear Algebra?",
+  });
+
+  assert(res.answer.includes("Subject Boundary Guidance"), "Must output subject boundary guidance");
+  assert(res.answer.includes("Mathematics"), "Must identify Mathematics domain");
+  assert(res.answer.includes("Introduction to DBMS"), "Must redirect back to active DBMS topic");
+  assert(!res.answer.includes("Your question touches on concepts related to Introduction to DBMS"), "Must NOT claim matrix is part of DBMS notes");
+});
+
+// =====================================================================
 // SUMMARY
 // =====================================================================
 async function runAllAsyncAndSummarize() {
